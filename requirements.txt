@@ -33,3 +33,16 @@ uvloop==0.21.0
 watchfiles==1.1.0
 websockets==15.0.1
 yarl==1.20.1
+
+# Vector Database
+pymilvus==2.6.0
+sentence-transformers==5.1.0
+torch==2.8.0
+
+# Additional dependencies for ML
+numpy>=1.17
+pandas>=1.2.4
+scikit-learn
+scipy
+transformers>=4.41.0
+huggingface-hub>=0.20.0
