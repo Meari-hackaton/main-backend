@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, BigInteger, DateTime, ForeignKey, func, Text
+from sqlalchemy import Column, String, BigInteger, Integer, DateTime, ForeignKey, func, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -21,17 +21,19 @@ class News(Base):
     
     # 관계 설정
     tag = relationship("Tag", back_populates="news_items")
-    quotes = relationship("NewsQuote", back_populates="news", cascade="all, delete-orphan")
 
 
 class NewsQuote(Base):
     __tablename__ = "news_quotes"
     
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    news_id = Column(String(50), ForeignKey("news.news_id", ondelete="CASCADE"), nullable=False)
+    news_id = Column(String(50), nullable=False)
     quote_text = Column(Text, nullable=False)
-    quote_type = Column(String(50), nullable=False)  # 'experience', 'emotion', 'insight'
+    quote_type = Column(String(50), nullable=False)
+    speaker = Column(String(200), nullable=True)
+    emotion = Column(String(100), nullable=True)
+    extraction_method = Column(String(50), nullable=True)
+    tag_id = Column(Integer, ForeignKey("tags.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
-    # 관계 설정
-    news = relationship("News", back_populates="quotes")
+    tag = relationship("Tag", backref="quotes")
