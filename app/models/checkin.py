@@ -50,8 +50,9 @@ class AIPersonaHistory(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     persona_data = Column(JSONB, nullable=False)  # LLM이 생성한 페르소나 분석
-    event_type = Column(String(50))  # 'initial', 'daily_ritual' 등
+    event_type = Column(String(50))  # 'initial', 'ritual_update' 등
     event_date = Column(Date, nullable=False, server_default=func.current_date())
+    is_latest = Column(Boolean, nullable=False, default=False)  # 최신 페르소나 여부
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     # 관계 설정
