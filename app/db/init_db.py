@@ -54,4 +54,8 @@ async def reset_db():
 
 
 if __name__ == "__main__":
+    # 기본 실행: 테이블만 생성 (데이터 유지)
     asyncio.run(init_db())
+    
+    # 완전 초기화가 필요한 경우 명시적으로 reset_db() 호출
+    # asyncio.run(reset_db())
