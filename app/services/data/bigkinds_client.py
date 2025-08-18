@@ -79,7 +79,16 @@ class BigKindsClient:
                 "hilight": 200,
                 "return_from": (page - 1) * size,
                 "return_size": size,
-                "fields": ["news_id", "title", "provider", "published_at"]
+                "fields": [
+                    "news_id", 
+                    "title", 
+                    "provider", 
+                    "published_at",
+                    "content",
+                    "hilight",
+                    "tms_raw_stream",
+                    "category"
+                ]
             }
         }
         
@@ -114,15 +123,7 @@ class BigKindsClient:
             "argument": {
                 "news_ids": news_ids,
                 "fields": [
-                    "content",
-                    "byline",
-                    "category",
-                    "category_incident",
-                    "images",
-                    "provider_subject",
-                    "provider_news_id",
-                    "publisher_code",
-                    "provider_link_page"
+                    "provider_link_page"  # 원본 링크만 추가로 가져오기
                 ]
             }
         }

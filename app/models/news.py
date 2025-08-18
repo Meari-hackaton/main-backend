@@ -9,7 +9,9 @@ class News(Base):
     
     news_id = Column(String(50), primary_key=True)  # 빅카인즈 고유 ID
     title = Column(String(500), nullable=False)
-    content = Column(Text, nullable=False)  # 뉴스 본문
+    content = Column(Text, nullable=False)  # 뉴스 본문 (200자)
+    hilight = Column(Text)  # 검색어 주변 텍스트 (200자)
+    tms_raw_stream = Column(Text)  # 형태소 분석 키워드 스트림
     provider = Column(String(100), nullable=False)  # 언론사
     published_at = Column(DateTime(timezone=True), nullable=False)
     link_url = Column(String(500))  # 원문 링크

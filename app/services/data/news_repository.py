@@ -61,11 +61,19 @@ class NewsRepository:
                     "%Y-%m-%d %H:%M:%S"
                 )
                 
+                # hilight에서 HTML 태그 제거
+                import re
+                hilight = news_data.get("hilight", "")
+                if hilight:
+                    hilight = re.sub('<[^>]+>', '', hilight)
+                
                 # News 객체 생성
                 news = News(
                     news_id=news_data["news_id"],
                     title=news_data["title"],
                     content=news_data.get("content", ""),
+                    hilight=hilight,
+                    tms_raw_stream=news_data.get("tms_raw_stream", ""),
                     provider=news_data["provider"],
                     published_at=published_at,
                     link_url=news_data.get("provider_link_page", ""),
@@ -129,11 +137,19 @@ class NewsRepository:
                         "%Y-%m-%d %H:%M:%S"
                     )
                     
+                    # hilight에서 HTML 태그 제거
+                    import re
+                    hilight = news_data.get("hilight", "")
+                    if hilight:
+                        hilight = re.sub('<[^>]+>', '', hilight)
+                    
                     # News 객체 생성
                     news = News(
                         news_id=news_data["news_id"],
                         title=news_data["title"],
                         content=news_data.get("content", ""),
+                        hilight=hilight,
+                        tms_raw_stream=news_data.get("tms_raw_stream", ""),
                         provider=news_data["provider"],
                         published_at=published_at,
                         link_url=news_data.get("provider_link_page", ""),
