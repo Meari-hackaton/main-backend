@@ -121,7 +121,8 @@ class BigKindsClient:
                     "images",
                     "provider_subject",
                     "provider_news_id",
-                    "publisher_code"
+                    "publisher_code",
+                    "provider_link_page"
                 ]
             }
         }

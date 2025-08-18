@@ -50,9 +50,14 @@ class NewsRepository:
                     print(f"뉴스 {news_data['news_id']}는 이미 존재합니다")
                     return False
                 
-                # 날짜 파싱
+                # 날짜 파싱 - 빅카인즈 API 응답 형식에 맞춤
+                # 예: "2019-01-01T00:00:00.000+09:00"
+                published_at_str = news_data["published_at"]
+                if "T" in published_at_str:
+                    # ISO 형식 처리
+                    published_at_str = published_at_str.split("T")[0] + " 00:00:00"
                 published_at = datetime.strptime(
-                    news_data["published_at"], 
+                    published_at_str, 
                     "%Y-%m-%d %H:%M:%S"
                 )
                 
@@ -113,9 +118,14 @@ class NewsRepository:
                         stats["duplicate"] += 1
                         continue
                     
-                    # 날짜 파싱
+                    # 날짜 파싱 - 빅카인즈 API 응답 형식에 맞춤
+                    # 예: "2019-01-01T00:00:00.000+09:00"
+                    published_at_str = news_data["published_at"]
+                    if "T" in published_at_str:
+                        # ISO 형식 처리
+                        published_at_str = published_at_str.split("T")[0] + " 00:00:00"
                     published_at = datetime.strptime(
-                        news_data["published_at"], 
+                        published_at_str, 
                         "%Y-%m-%d %H:%M:%S"
                     )
                     
@@ -135,7 +145,11 @@ class NewsRepository:
                     stats["success"] += 1
                     
                 except Exception as e:
-                    print(f"뉴스 {news_data.get('news_id')} 저장 실패: {e}")
+                    import traceback
+                    print(f"뉴스 {news_data.get('news_id')} 저장 실패:")
+                    print(f"  에러: {e}")
+                    print(f"  타입: {type(e).__name__}")
+                    print(f"  트레이스백: {traceback.format_exc()}")
                     stats["failed"] += 1
             
             # 일괄 커밋
