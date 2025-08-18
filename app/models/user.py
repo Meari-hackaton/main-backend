@@ -19,7 +19,8 @@ class User(Base):
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     meari_sessions = relationship("MeariSession", back_populates="user", cascade="all, delete-orphan")
     generated_cards = relationship("GeneratedCard", back_populates="user", cascade="all, delete-orphan")
-    daily_checkins = relationship("DailyCheckin", back_populates="user", cascade="all, delete-orphan")
+    rituals = relationship("Ritual", back_populates="user", cascade="all, delete-orphan")
+    content_histories = relationship("UserContentHistory", back_populates="user", cascade="all, delete-orphan")
     heart_tree = relationship("HeartTree", back_populates="user", uselist=False, cascade="all, delete-orphan")
     persona_histories = relationship("AIPersonaHistory", back_populates="user", cascade="all, delete-orphan")
     

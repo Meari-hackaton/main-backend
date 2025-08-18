@@ -4,23 +4,28 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
-class DailyCheckin(Base):
-    __tablename__ = "daily_checkins"
+class Ritual(Base):
+    __tablename__ = "rituals"
     
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    ritual_sequence = Column(Integer, nullable=False)  # 사용자별 리츄얼 순번 (날짜 무관)
+    diary_entry = Column(Text)  # 사용자가 작성한 일기
+    selected_mood = Column(String(50))  # 선택한 기분 (예: 'happy', 'tired', 'anxious')
     mood_text = Column(Text)  # "오늘은 피곤해요"
     mood_level = Column(SmallInteger, CheckConstraint('mood_level >= 1 AND mood_level <= 5'))
     ritual_suggestion = Column(JSONB)  # AI가 제안한 활동
     ritual_completed = Column(Boolean, default=False)
     checkin_date = Column(Date, nullable=False, server_default=func.current_date())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     # 관계 설정
-    user = relationship("User", back_populates="daily_checkins")
+    user = relationship("User", back_populates="rituals")
     
     # 하루에 한 번만 체크인
     __table_args__ = (
-        UniqueConstraint('user_id', 'checkin_date', name='_user_checkin_date_uc'),
+        UniqueConstraint('user_id', 'checkin_date', name='_user_ritual_date_uc'),
+        UniqueConstraint('user_id', 'ritual_sequence', name='_user_ritual_sequence_uc'),
     )
 
 
@@ -45,8 +50,9 @@ class AIPersonaHistory(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     persona_data = Column(JSONB, nullable=False)  # LLM이 생성한 페르소나 분석
-    event_type = Column(String(50))  # 'initial', 'daily_ritual' 등
+    event_type = Column(String(50))  # 'initial', 'ritual_update' 등
     event_date = Column(Date, nullable=False, server_default=func.current_date())
+    is_latest = Column(Boolean, nullable=False, default=False)  # 최신 페르소나 여부
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     # 관계 설정
