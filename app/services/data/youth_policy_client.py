@@ -18,7 +18,8 @@ class YouthPolicyClient:
         if not self.api_key:
             raise ValueError("YOUTH_POLICY_API_KEY 환경변수가 설정되지 않았습니다")
         
-        self.base_url = "https://www.youthcenter.go.kr/opi"
+        self.base_url = "https://www.youthcenter.go.kr/opi"  # XML API용
+        self.web_url = "https://www.youthcenter.go.kr/go/ythip"  # JSON API용
         self.session: Optional[aiohttp.ClientSession] = None
     
     async def __aenter__(self):
@@ -102,14 +103,45 @@ class YouthPolicyClient:
             return {"total_count": 0, "policies": []}
     
     async def get_policy_list(self, page_index: int = 1, page_size: int = 100) -> Dict:
-        """정책 목록 조회"""
+        """정책 목록 조회 - JSON API 사용"""
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+        
+        url = f"{self.web_url}/getPlcy"
         params = {
-            "pageIndex": page_index,
-            "display": page_size
+            "apiKeyNm": self.api_key,  # 필수 파라미터
+            "pageNum": page_index,     # pageIndex -> pageNum
+            "pageSize": page_size,
+            "rtnType": "json"          # JSON 응답 요청
         }
         
-        xml_response = await self._request("empList.do", params)
-        return self._parse_xml_response(xml_response)
+        try:
+            async with self.session.get(url, params=params) as response:
+                if response.status == 200:
+                    text = await response.text()
+                    
+                    # JSON 파싱
+                    import json
+                    json_data = json.loads(text)
+                    
+                    # 실제 응답 구조: result 안에 youthPolicyList와 pagging이 있음
+                    result = json_data.get("result", {})
+                    policies = result.get("youthPolicyList", [])
+                    
+                    # 페이징 정보에서 전체 개수 가져오기
+                    paging = result.get("pagging", {})
+                    total_count = paging.get("totCount", len(policies))
+                    
+                    return {
+                        "total_count": total_count,
+                        "policies": policies
+                    }
+                else:
+                    text = await response.text()
+                    raise Exception(f"API 요청 실패: {response.status} - {text}")
+        except Exception as e:
+            print(f"API 요청 중 오류: {e}")
+            raise
     
     async def get_policy_detail(self, policy_id: str) -> Optional[Dict]:
         """정책 상세 조회"""
@@ -164,47 +196,43 @@ class YouthPolicyClient:
         return all_policies
     
     def process_policy_data(self, raw_policy: Dict) -> Dict:
-        """원시 정책 데이터를 DB 모델에 맞게 가공"""
+        """원시 정책 데이터를 DB 모델에 맞게 가공 - JSON 응답용"""
         
-        # 신청 URL 생성 (없으면 온라인청년센터 상세페이지 링크)
-        application_url = raw_policy.get("rqutUrla", "")
+        # API 문서 기준 필드명 매핑
+        policy_id = raw_policy.get("plcyNo", "")
+        policy_name = raw_policy.get("plcyNm", "")
+        
+        # 신청 URL 처리
+        application_url = raw_policy.get("aplyUrlAddr", "")
         if not application_url:
-            policy_id = raw_policy.get("bizId", "")
-            application_url = f"https://www.youthcenter.go.kr/youngPlcyUnif/youngPlcyUnifDtl.do?bizId={policy_id}"
+            application_url = f"https://www.youthcenter.go.kr/youngPlcyUnif/youngPlcyUnifDtl.do?plcyNo={policy_id}"
         
-        # 연령 정보 처리
-        age_info = raw_policy.get("ageInfo", "")
+        # 연령 정보
+        age_min = raw_policy.get("sprtTrgtMinAge", "")
+        age_max = raw_policy.get("sprtTrgtMaxAge", "")
+        target_age = f"{age_min}세~{age_max}세" if age_min and age_max else ""
         
-        # 대상 설명 생성
-        target_desc_parts = []
-        if raw_policy.get("majrRqisCn"):
-            target_desc_parts.append(f"전공: {raw_policy['majrRqisCn']}")
-        if raw_policy.get("empmSttsCn"):
-            target_desc_parts.append(f"취업상태: {raw_policy['empmSttsCn']}")
-        if raw_policy.get("splzRlmRqisCn"):
-            target_desc_parts.append(f"특화분야: {raw_policy['splzRlmRqisCn']}")
+        # 대상 설명 - 추가 신청자격 조건
+        target_desc = raw_policy.get("addAplyQlfcCndCn", "")
         
-        target_desc = " / ".join(target_desc_parts) if target_desc_parts else ""
+        # 지원 내용 - 정책설명 + 정책지원내용
+        support_content = raw_policy.get("plcyExplnCn", "")
+        if raw_policy.get("plcySprtCn"):
+            support_content = f"{support_content}\n\n{raw_policy['plcySprtCn']}"
         
-        # 지원 내용 (정책 소개 + 지원 내용 결합)
-        support_content_parts = []
-        if raw_policy.get("polyItcnCn"):
-            support_content_parts.append(raw_policy["polyItcnCn"])
-        if raw_policy.get("sporCn"):
-            support_content_parts.append(raw_policy["sporCn"])
-        
-        support_content = "\n\n".join(support_content_parts) if support_content_parts else ""
+        # 신청 기간
+        application_period = raw_policy.get("aplyYmd", "")
         
         return {
-            "policy_id": raw_policy.get("bizId", ""),
-            "policy_name": raw_policy.get("polyBizSjnm", ""),
+            "policy_id": str(policy_id),
+            "policy_name": policy_name,
             "support_content": support_content,
             "application_url": application_url,
-            "organization": raw_policy.get("cnsgNmor", ""),
-            "target_age": age_info,
+            "organization": raw_policy.get("operInstCdNm", ""),  # 운영기관코드명
+            "target_age": target_age,
             "target_desc": target_desc,
-            "support_scale": "",  # API에서 제공하지 않음
-            "application_period": raw_policy.get("rqutPrdCn", ""),
+            "support_scale": raw_policy.get("sprtSclCnt", ""),  # 지원규모수
+            "application_period": application_period,
             "tags": []  # 태그 매핑 제거 (벡터 검색 사용)
         }
 
@@ -220,8 +248,10 @@ async def test_client():
             # 첫 번째 정책 상세 확인
             first_policy = result["policies"][0]
             print(f"\n첫 번째 정책:")
-            print(f"- ID: {first_policy.get('bizId')}")
-            print(f"- 정책명: {first_policy.get('polyBizSjnm')}")
+            print(f"- ID: {first_policy.get('plcyNo')}")
+            print(f"- 정책명: {first_policy.get('plcyNm')}")
+            print(f"- 기관: {first_policy.get('operInstCdNm')}")
+            print(f"- 신청URL: {first_policy.get('aplyUrlAddr', '없음')}")
             
             # 가공 테스트
             processed = client.process_policy_data(first_policy)
