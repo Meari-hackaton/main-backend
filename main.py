@@ -9,6 +9,8 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from jose import jwt, JWTError
 from dotenv import load_dotenv
 
+# ** 세션 인증 방식으로 변경하기, firebase 확인해보기
+
 # .env 세팅
 load_dotenv()
 
@@ -109,7 +111,6 @@ async def google_callback(request: Request,
         google_sub = payload["sub"]
         email = payload.get("email")
         name = payload.get("name")
-        picture = payload.get("picture")
     except Exception as e:
         return JSONResponse({"error":"ID token decode failed"}, status_code=400)
 
@@ -155,17 +156,6 @@ def profile(user = Depends(get_current_user)):
 def logout(response: Response):
     response.delete_cookie("token")
     return {"message": "Logged out"}
-
-# --- CORS 설정 ---
-from fastapi.middleware.cors import CORSMiddleware
-origins = ["http://localhost:3000"]  # 프론트 주소에 맞춰서!
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_methods=['*'],
-    allow_headers=['*'],
-    allow_credentials=True
-)
 
 from fastapi.responses import RedirectResponse
 

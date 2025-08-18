@@ -4,6 +4,5 @@ CREATE TABLE users (
   provider_id TEXT NOT NULL,
   email TEXT,
   name TEXT,
-  picture TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
