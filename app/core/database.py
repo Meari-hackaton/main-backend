@@ -14,6 +14,9 @@ AsyncSessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
+# Alias for compatibility
+async_session = AsyncSessionLocal
+
 Base = declarative_base()
 
 # Dependency

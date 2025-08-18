@@ -9,12 +9,15 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import json
 from app.core.config import settings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class BigKindsClient:
     """빅카인즈 API 클라이언트"""
     
-    BASE_URL = "https://www.bigkinds.or.kr/api"
+    BASE_URL = "https://tools.kinds.or.kr"
     
     def __init__(self):
         self.access_key = os.getenv("BIGKINDS_ACCESS_KEY")
@@ -82,7 +85,7 @@ class BigKindsClient:
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self.BASE_URL}/news/v2/search",
+                f"{self.BASE_URL}/search/news",
                 headers=self.headers,
                 json=search_params
             ) as response:
@@ -125,7 +128,7 @@ class BigKindsClient:
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self.BASE_URL}/news/v2/detail",
+                f"{self.BASE_URL}/search/news",
                 headers=self.headers,
                 json=detail_params
             ) as response:
