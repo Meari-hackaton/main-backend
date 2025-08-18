@@ -75,7 +75,7 @@ class BigKindsClient:
                 "subject_info2": [],
                 "subject_info3": [],
                 "subject_info4": [],
-                "sort": {"date": "desc"},  # 최신순 정렬
+                "sort": {"_score": "desc"},  # 정확도순 정렬
                 "hilight": 200,
                 "return_from": (page - 1) * size,
                 "return_size": size,
