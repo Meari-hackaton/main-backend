@@ -1,8 +1,0 @@
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  provider TEXT NOT NULL,
-  provider_id TEXT NOT NULL,
-  email TEXT,
-  name TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);

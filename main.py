@@ -59,7 +59,6 @@ class User(Base):
     provider_id = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True)
     name = Column(String(255), nullable=True)
-    picture = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (
@@ -90,17 +89,17 @@ app.add_middleware(
 def get_db() -> Session:
     db = SessionLocal()
     try:
-        return db
+        yield db
     finally:
-        ...
+        db.close()
 
 
 def find_user(db: Session, provider: str, provider_id: str) -> Optional[User]:
     return db.query(User).filter(User.provider == provider, User.provider_id == provider_id).first()
 
 
-def create_user(db: Session, provider: str, provider_id: str, email: Optional[str], name: Optional[str], picture: Optional[str]) -> User:
-    user = User(provider=provider, provider_id=provider_id, email=email, name=name, picture=picture)
+def create_user(db: Session, provider: str, provider_id: str, email: Optional[str], name: Optional[str]) -> User:
+    user = User(provider=provider, provider_id=provider_id, email=email, name=name)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -176,7 +175,7 @@ def verify_firebase_session(request: Request) -> dict:
     try:
         # check_revoked=True로 설정하면 revoke_refresh_tokens 이후의 쿠키는 거부됨
         decoded = auth.verify_session_cookie(session_cookie, check_revoked=True)
-        return decoded  # { 'uid': '...', 'email': '...', 'name': '...', 'picture': '...' }
+        return decoded  # { 'uid': '...', 'email': '...', 'name': '...' }
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
@@ -189,13 +188,11 @@ def get_current_user(request: Request):
 
     email = decoded.get("email")
     name = decoded.get("name")
-    picture = decoded.get("picture")
-
     db = SessionLocal()
     try:
         user = find_user(db, provider="firebase", provider_id=uid)
         if not user:
-            user = create_user(db, provider="firebase", provider_id=uid, email=email, name=name, picture=picture)
+            user = create_user(db, provider="firebase", provider_id=uid, email=email, name=name)
         return user
     finally:
         db.close()
@@ -204,7 +201,7 @@ def get_current_user(request: Request):
 # API 엔드포인트
 # -----------------------------------------------------------------------------
 
-@app.get("/profile")
+@app.get("/profile")  # 다시 확인해보기 
 def profile(user: User = Depends(get_current_user)):
     return {
         "id": user.id,
