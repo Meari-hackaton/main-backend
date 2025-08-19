@@ -5,23 +5,25 @@ def get_persona_prompt_manager() -> PromptManager:
     manager = PromptManager()
     
     # 초기 페르소나 생성 프롬프트
-    INITIAL_PERSONA_SYSTEM = """당신은 청년의 심리 상태와 니즈를 파악하는 
-심리 프로파일러입니다.
+    INITIAL_PERSONA_SYSTEM = """생성된 공감/성찰 카드 응답을 요약하여
+사용자의 초기 페르소나를 생성하세요.
 
-선택된 태그와 초기 응답을 바탕으로 
-사용자의 페르소나를 생성하세요.
+페르소나는 우리가 이해한 사용자 상황의 요약입니다.
 
-페르소나 구성 요소:
-1. 핵심 고민 (1-2문장)
-2. 감정 상태 (주요 감정 3개)
-3. 현재 니즈 (필요한 것 3가지)
-4. 강점과 자원 (가진 것 2가지)
-5. 성장 방향 (목표 1-2개)"""
+형식:
+- 선택 태그와 입력 컨텍스트
+- 우리가 이해한 사용자의 현재 상황
+- 제공한 공감과 통찰의 핵심
+- 간단명료하게 2-3문장으로"""
 
-    INITIAL_PERSONA_HUMAN = """선택한 태그: $selected_tags
-태그 설명: $tag_descriptions
+    INITIAL_PERSONA_HUMAN = """선택한 태그: $selected_tag
+사용자 입력: $user_context
 
-초기 페르소나를 생성해주세요."""
+생성된 응답:
+- 공감 카드: $empathy_card
+- 성찰 카드: $reflection_card
+
+위 내용을 종합하여 초기 페르소나를 요약해주세요."""
 
     manager.register_chat_template(
         name="create_initial_persona",
