@@ -42,6 +42,12 @@ torch==2.8.0
 # Graph Database
 neo4j==5.28.2
 
+# LangChain & AI
+langchain==0.3.27
+langchain-core==0.3.74
+langchain-google-genai==2.1.9
+langchain-experimental>=0.3.0
+
 # Additional dependencies for ML
 numpy>=1.17
 pandas>=1.2.4
