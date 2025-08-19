@@ -139,20 +139,42 @@ LIMIT 5"""
             expected_output="노드와 관계 정보"
         )
     
-    def execute_query(self, query: str) -> List[Dict[str, Any]]:
-        """Cypher 쿼리 실행"""
+    def execute_query(self, query: str, retry_count: int = 0) -> List[Dict[str, Any]]:
+        """Cypher 쿼리 실행 (유연한 재시도 포함)"""
         with self.driver.session() as session:
             try:
                 result = session.run(query)
-                return [dict(record) for record in result]
+                data = [dict(record) for record in result]
+                
+                # 결과가 비어있으면 None 대신 빈 리스트 반환
+                return data if data else []
+                
             except Exception as e:
-                print(f"Cypher 실행 오류: {e}")
+                error_msg = str(e)
+                print(f"Cypher 실행 오류 (시도 {retry_count + 1}): {error_msg}")
+                
+                # 구문 오류면 AI에게 다시 생성 요청
+                if retry_count < 2:
+                    if "SyntaxError" in error_msg or "not found" in error_msg:
+                        # 에러 메시지를 포함해서 AI에게 재생성 요청
+                        return self._retry_with_error_feedback(query, error_msg, retry_count + 1)
+                
                 return []
     
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """LangGraph 상태 처리"""
-        question = state.get("reflection_query", "")
-        tag_id = state.get("tag_id")
+        # user_context와 tag_ids를 활용해 질문 생성
+        user_context = state.get("user_context", "")
+        tag_ids = state.get("tag_ids", [])
+        
+        # 질문 생성
+        if user_context:
+            question = f"{user_context}와 관련된 문제와 원인, 해결책을 찾아주세요"
+        else:
+            question = "청년들이 겪는 주요 문제와 그 원인, 해결책을 찾아주세요"
+        
+        # 첫 번째 태그 사용
+        tag_id = tag_ids[0] if tag_ids else None
         
         # Cypher 쿼리 생성
         cypher_result = self.generate_query(question, tag_id)
@@ -160,12 +182,62 @@ LIMIT 5"""
         # 쿼리 실행
         results = self.execute_query(cypher_result.query)
         
+        # 결과가 없으면 더 넓은 범위로 재시도
+        if not results and tag_id:
+            print(f"결과 없음. 더 넓은 범위로 재시도 (태그 {tag_id})")
+            # 단순한 fallback 쿼리
+            fallback_queries = [
+                # 1차: 해당 태그의 모든 노드
+                f"MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(node) "
+                f"RETURN DISTINCT labels(node)[0] as type, node.name as name, node.id as id LIMIT 10",
+                
+                # 2차: 해당 태그의 Problem 노드만
+                f"MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p:Problem) "
+                f"RETURN p.name as problem, p.id as id LIMIT 5",
+                
+                # 3차: 모든 Problem 노드 (태그 무관)
+                f"MATCH (p:Problem) RETURN p.name as problem LIMIT 5"
+            ]
+            
+            for fallback_query in fallback_queries:
+                results = self.execute_query(fallback_query)
+                if results:
+                    print(f"Fallback 쿼리 성공")
+                    break
+        
         # 상태 업데이트
         state["cypher_query"] = cypher_result.query
         state["graph_results"] = results
         state["graph_explanation"] = cypher_result.explanation
         
         return state
+    
+    def _retry_with_error_feedback(self, failed_query: str, error_msg: str, retry_count: int) -> List[Dict[str, Any]]:
+        """에러 피드백을 포함해서 쿼리 재생성"""
+        
+        # AI에게 에러 정보와 함께 재생성 요청
+        retry_prompt = f"""
+        다음 Cypher 쿼리가 실패했습니다:
+        쿼리: {failed_query}
+        에러: {error_msg}
+        
+        올바른 Cypher 쿼리로 수정해주세요.
+        사용 가능한 노드: Problem, Context, Initiative, Stakeholder, Cohort, News
+        사용 가능한 관계: CAUSES, ADDRESSES, INVOLVES, AFFECTS, CONTAINS
+        """
+        
+        try:
+            response = self.llm.invoke(retry_prompt)
+            new_query = response.content.strip()
+            if "```" in new_query:
+                new_query = new_query.split("```")[1].replace("cypher", "").strip()
+            
+            print(f"재생성된 쿼리: {new_query}")
+            return self.execute_query(new_query, retry_count)
+            
+        except Exception as e:
+            print(f"쿼리 재생성 실패: {e}")
+            return []
     
     def close(self):
         """드라이버 종료"""
