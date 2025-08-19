@@ -33,7 +33,7 @@ class KnowledgeGraphBuilder:
         self.engine = create_engine(database_url.replace("asyncpg", "psycopg2"))
         
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite",  # 일일 1,000개 제한
+            model="gemini-2.5-flash-lite",
             temperature=0.1,
             google_api_key=os.getenv("GEMINI_API_KEY"),
             system_instruction="""
