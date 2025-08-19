@@ -5,15 +5,18 @@ from pydantic import BaseModel, Field
 import os
 
 
-class ReflectionCard(BaseModel):
-    """성찰 카드 응답"""
-    content: str = Field(description="성찰 카드 내용")
-    problem: str = Field(description="핵심 문제")
-    contexts: List[str] = Field(description="맥락적 요인들")
-    affected_groups: List[str] = Field(description="영향받는 집단들")
-    initiatives: List[str] = Field(description="해결 시도들")
-    stakeholders: List[str] = Field(description="관련 기관들")
-    insight: str = Field(description="핵심 통찰")
+class InsightCard(BaseModel):
+    """개별 인사이트 카드"""
+    title: str = Field(description="카드 제목")
+    content: str = Field(description="카드 내용 (200-300자)")
+    news_id: Optional[str] = Field(description="관련 뉴스 ID")
+    news_title: Optional[str] = Field(description="관련 뉴스 제목")
+    news_date: Optional[str] = Field(description="관련 뉴스 날짜")
+    key_points: List[str] = Field(description="핵심 포인트 3개")
+    
+class ReflectionCards(BaseModel):
+    """성찰 카드 3종 세트"""
+    cards: List[InsightCard] = Field(description="3개의 인사이트 카드")
 
 
 class ReflectionAgent:
@@ -32,133 +35,175 @@ class ReflectionAgent:
         """성찰 카드 생성 프롬프트"""
         
         system_message = """당신은 청년들의 문제를 사회적 맥락에서 이해하는 상담사입니다.
-그래프 데이터를 바탕으로 "당신은 혼자가 아니에요"라는 메시지를 전달하는 성찰 카드를 작성하세요.
+주어진 데이터 각각에 대해 독립적인 인사이트 카드를 작성하세요.
 
 ## 작성 원칙:
-1. 개인의 문제가 아닌 사회적 현상임을 강조
-2. 같은 어려움을 겪는 집단이 있음을 보여줌
-3. 사회가 이미 해결을 위해 노력하고 있음을 전달
-4. 비판이나 평가 없이 구조적 이해 제공
-5. 희망적이지만 현실적인 톤 유지
+1. 각 카드는 200-300자로 작성
+2. 카드별로 다른 관점 제시
+3. 구체적인 통계나 사실 포함
+4. 희망적이지만 현실적인 톤
 
-## 구성 요소:
-- 문제 인식: 당신이 겪는 [문제]는...
-- 맥락적 이해: [원인들]로 인한 사회적 현상
-- 공감대 형성: [집단들]도 같은 어려움 경험
-- 사회적 노력: [기관들]의 [해결 시도들]
-- 통찰: 구조적 문제임을 인정하고 연대 강조
+## 카드 유형:
+1. "뉴스가 말해주는 진짜 이유" - 문제의 구조적 원인
+2. "왜 이런 일이 생기는 걸까요?" - 사회적 맥락과 배경
+3. "희망적인 변화들도 있어요" - 해결 노력과 지원
 
-## 피해야 할 표현:
-- "개인의 노력으로 극복하세요"
-- "긍정적으로 생각하세요"
-- 문제를 축소하거나 단순화하는 표현"""
+## 각 카드 구성:
+- 제목: 15-20자
+- 내용: 200-300자
+- 핵심 포인트: 3개 (각 20자 내외)"""
         
-        human_template = """다음 그래프 분석 결과를 바탕으로 성찰 카드를 작성하세요:
+        human_template = """다음 3개의 그래프 분석 결과로 각각 다른 인사이트 카드를 작성하세요:
 
-문제: {problem}
-맥락적 요인들: {contexts}
-영향받는 집단들: {affected_groups}
-해결 시도들: {initiatives}
-관련 기관들: {stakeholders}
+{graph_results}
 
 사용자 상황: {user_context}
 
-성찰 카드:"""
+3개의 인사이트 카드를 JSON 형식으로 작성:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
             ("human", human_template)
         ])
     
-    def analyze_graph_results(self, graph_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """그래프 결과 분석 및 정리"""
-        
-        # 결과 집계
-        problems = []
-        contexts = []
-        affected_groups = []
-        initiatives = []
-        stakeholders = []
-        
-        for result in graph_results:
-            # 각 필드별로 수집
-            if "problem" in result:
-                problems.append(result["problem"])
-            
-            if "cause" in result or "context" in result:
-                contexts.append(result.get("cause") or result.get("context"))
-            
-            if "affected_group" in result or "cohort" in result:
-                affected_groups.append(result.get("affected_group") or result.get("cohort"))
-            
-            if "initiative" in result or "solution" in result:
-                initiatives.append(result.get("initiative") or result.get("solution"))
-            
-            if "stakeholder" in result or "organization" in result:
-                stakeholders.append(result.get("stakeholder") or result.get("organization"))
-            
-            # 리스트 형태로 온 경우 처리
-            if "contexts" in result and isinstance(result["contexts"], list):
-                contexts.extend(result["contexts"])
-            if "affected_groups" in result and isinstance(result["affected_groups"], list):
-                affected_groups.extend(result["affected_groups"])
-            if "initiatives" in result and isinstance(result["initiatives"], list):
-                initiatives.extend(result["initiatives"])
-            if "stakeholders" in result and isinstance(result["stakeholders"], list):
-                stakeholders.extend(result["stakeholders"])
-        
-        # 중복 제거 및 정리
-        return {
-            "problem": problems[0] if problems else "알 수 없는 문제",
-            "contexts": list(set(filter(None, contexts)))[:5],  # 최대 5개
-            "affected_groups": list(set(filter(None, affected_groups)))[:5],
-            "initiatives": list(set(filter(None, initiatives)))[:5],
-            "stakeholders": list(set(filter(None, stakeholders)))[:5]
-        }
-    
-    def generate_reflection_card(
+    def generate_reflection_cards(
         self,
-        graph_data: Dict[str, Any],
+        graph_results: List[Dict[str, Any]],
         user_context: str
-    ) -> ReflectionCard:
-        """성찰 카드 생성"""
+    ) -> List[InsightCard]:
+        """3개의 인사이트 카드 생성"""
         
-        # 프롬프트에 데이터 전달
+        # 결과가 없으면 기본 카드 생성
+        if not graph_results:
+            return self._generate_default_cards()
+        
+        # 그래프 결과를 JSON 형식으로 변환
+        formatted_results = []
+        for i, result in enumerate(graph_results[:3], 1):
+            formatted_results.append({
+                "index": i,
+                "news_id": result.get("news_id", ""),
+                "news_title": result.get("news_title", ""),
+                "news_date": result.get("news_date", ""),
+                "problem": result.get("problem", ""),
+                "contexts": result.get("contexts", [])[:3],
+                "initiatives": result.get("initiatives", [])[:3],
+                "stakeholders": result.get("stakeholders", [])[:2],
+                "affected_groups": result.get("affected_groups", [])[:2]
+            })
+        
+        # LLM으로 카드 생성
         chain = self.prompt | self.llm
         response = chain.invoke({
-            "problem": graph_data["problem"],
-            "contexts": ", ".join(graph_data["contexts"]) if graph_data["contexts"] else "알 수 없음",
-            "affected_groups": ", ".join(graph_data["affected_groups"]) if graph_data["affected_groups"] else "많은 청년들",
-            "initiatives": ", ".join(graph_data["initiatives"]) if graph_data["initiatives"] else "다양한 정책",
-            "stakeholders": ", ".join(graph_data["stakeholders"]) if graph_data["stakeholders"] else "여러 기관",
+            "graph_results": str(formatted_results),
             "user_context": user_context
         })
         
-        # 통찰 생성
-        insight = self._generate_insight(graph_data)
-        
-        return ReflectionCard(
-            content=response.content,
-            problem=graph_data["problem"],
-            contexts=graph_data["contexts"],
-            affected_groups=graph_data["affected_groups"],
-            initiatives=graph_data["initiatives"],
-            stakeholders=graph_data["stakeholders"],
-            insight=insight
-        )
+        # 응답 파싱하여 카드 생성
+        try:
+            import json
+            cards_data = json.loads(response.content)
+            
+            cards = []
+            card_titles = [
+                "뉴스가 말해주는 진짜 이유",
+                "왜 이런 일이 생기는 걸까요?", 
+                "희망적인 변화들도 있어요"
+            ]
+            
+            for i, (result, title) in enumerate(zip(graph_results[:3], card_titles)):
+                card_data = cards_data[i] if i < len(cards_data) else {}
+                
+                card = InsightCard(
+                    title=card_data.get("title", title),
+                    content=card_data.get("content", f"{result.get('problem', '문제')}에 대한 분석"),
+                    news_id=result.get("news_id"),
+                    news_title=result.get("news_title"),
+                    news_date=result.get("news_date"),
+                    key_points=card_data.get("key_points", [
+                        f"{result.get('contexts', [''])[0]}" if result.get('contexts') else "사회적 요인",
+                        f"{result.get('initiatives', [''])[0]}" if result.get('initiatives') else "해결 노력",
+                        f"{result.get('affected_groups', [''])[0]}" if result.get('affected_groups') else "함께하는 사람들"
+                    ])[:3]
+                )
+                cards.append(card)
+                
+            return cards
+            
+        except Exception as e:
+            print(f"카드 파싱 실패: {e}")
+            return self._generate_fallback_cards(graph_results)
     
-    def _generate_insight(self, graph_data: Dict[str, Any]) -> str:
-        """핵심 통찰 생성"""
+    def _generate_default_cards(self) -> List[InsightCard]:
+        """기본 카드 생성"""
+        return [
+            InsightCard(
+                title="뉴스가 말해주는 진짜 이유",
+                content="개인의 문제가 아닌 사회 구조적 문제입니다. 많은 청년들이 비슷한 어려움을 겪고 있으며, 이는 우리 사회가 함께 해결해야 할 과제입니다.",
+                news_id=None,
+                news_title=None,
+                news_date=None,
+                key_points=["사회 구조적 문제", "많은 청년들의 공통 경험", "함께 해결할 과제"]
+            ),
+            InsightCard(
+                title="왜 이런 일이 생기는 걸까요?",
+                content="경쟁 사회, 불안정한 고용 환경, 높은 생활비 등 복합적인 요인이 작용하고 있습니다. 이러한 환경은 개인이 아무리 노력해도 쉽게 바꿀 수 없는 구조적 문제입니다.",
+                news_id=None,
+                news_title=None,
+                news_date=None,
+                key_points=["복합적 사회 요인", "구조적 환경 문제", "개인 노력의 한계"]
+            ),
+            InsightCard(
+                title="희망적인 변화들도 있어요",
+                content="정부와 여러 기관에서 청년 지원 정책을 확대하고 있습니다. 또한 청년들 스스로도 연대하며 변화를 만들어가고 있습니다. 혼자가 아닌 함께 해결해 나갈 수 있습니다.",
+                news_id=None,
+                news_title=None,
+                news_date=None,
+                key_points=["청년 지원 정책 확대", "청년 연대와 변화", "함께하는 해결"]
+            )
+        ]
+    
+    def _generate_fallback_cards(self, graph_results: List[Dict[str, Any]]) -> List[InsightCard]:
+        """폴백 카드 생성"""
+        cards = []
+        card_configs = [
+            ("뉴스가 말해주는 진짜 이유", "문제의 구조적 원인을 보여줍니다"),
+            ("왜 이런 일이 생기는 걸까요?", "사회적 맥락과 배경을 설명합니다"),
+            ("희망적인 변화들도 있어요", "해결 노력과 지원을 소개합니다")
+        ]
         
-        # 데이터 기반 통찰
-        if len(graph_data["contexts"]) > 2:
-            return f"이 문제는 {len(graph_data['contexts'])}개 이상의 복합적 요인이 작용하는 구조적 문제입니다."
-        elif len(graph_data["stakeholders"]) > 2:
-            return f"{len(graph_data['stakeholders'])}개 이상의 기관이 함께 해결하려 노력하는 사회적 과제입니다."
-        elif graph_data["affected_groups"]:
-            return f"당신뿐만 아니라 {', '.join(graph_data['affected_groups'][:2])} 등 많은 이들이 겪는 공통의 어려움입니다."
-        else:
-            return "이 문제는 개인의 잘못이 아닌 우리 사회가 함께 해결해야 할 과제입니다."
+        for i, (title, default_content) in enumerate(card_configs):
+            if i < len(graph_results):
+                result = graph_results[i]
+                content = f"{result.get('problem', '청년 문제')}는 "
+                if result.get('contexts'):
+                    content += f"{', '.join(result['contexts'][:2])} 등의 요인으로 발생합니다. "
+                if result.get('initiatives'):
+                    content += f"{', '.join(result['initiatives'][:2])} 등의 노력이 진행 중입니다."
+                
+                cards.append(InsightCard(
+                    title=title,
+                    content=content[:300],
+                    news_id=result.get("news_id"),
+                    news_title=result.get("news_title"),
+                    news_date=result.get("news_date"),
+                    key_points=[
+                        result.get('contexts', [''])[0] if result.get('contexts') else "사회적 요인",
+                        result.get('initiatives', [''])[0] if result.get('initiatives') else "해결 노력",
+                        result.get('affected_groups', [''])[0] if result.get('affected_groups') else "함께하는 사람들"
+                    ][:3]
+                ))
+            else:
+                cards.append(InsightCard(
+                    title=title,
+                    content=default_content,
+                    news_id=None,
+                    news_title=None,
+                    news_date=None,
+                    key_points=["분석 중", "분석 중", "분석 중"]
+                ))
+        
+        return cards
     
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """LangGraph 상태 처리"""
@@ -167,21 +212,55 @@ class ReflectionAgent:
         graph_results = state.get("graph_results", [])
         user_context = state.get("user_context", "")
         
-        # 그래프 결과 분석
-        graph_data = self.analyze_graph_results(graph_results)
+        # 3개의 인사이트 카드 생성
+        cards = self.generate_reflection_cards(graph_results, user_context)
         
-        # 성찰 카드 생성
-        reflection_card = self.generate_reflection_card(graph_data, user_context)
+        # 상태 업데이트 - 3개 카드를 하나의 content로 통합
+        combined_content = "\n\n".join([
+            f"### {card.title}\n{card.content}"
+            for card in cards
+        ])
         
-        # 상태 업데이트
+        # insights 구조 생성 (스키마 호환성 유지)
+        insights = {
+            "problem": graph_results[0].get("problem", "청년 문제") if graph_results else "청년 문제",
+            "causes": [],
+            "solutions": [],
+            "supporters": [],
+            "peers": []
+        }
+        
+        # 각 카드에서 정보 수집
+        for i, result in enumerate(graph_results[:3]):
+            if result.get("contexts"):
+                insights["causes"].extend(result["contexts"][:2])
+            if result.get("initiatives"):
+                insights["solutions"].extend(result["initiatives"][:2])
+            if result.get("stakeholders"):
+                insights["supporters"].extend(result["stakeholders"][:2])
+            if result.get("affected_groups"):
+                insights["peers"].extend(result["affected_groups"][:2])
+        
+        # 중복 제거
+        insights["causes"] = list(set(insights["causes"]))[:3]
+        insights["solutions"] = list(set(insights["solutions"]))[:3]
+        insights["supporters"] = list(set(insights["supporters"]))[:2]
+        insights["peers"] = list(set(insights["peers"]))[:2]
+        
         state["reflection_card"] = {
-            "content": reflection_card.content,
-            "problem": reflection_card.problem,
-            "contexts": reflection_card.contexts,
-            "affected_groups": reflection_card.affected_groups,
-            "initiatives": reflection_card.initiatives,
-            "stakeholders": reflection_card.stakeholders,
-            "insight": reflection_card.insight
+            "content": combined_content,
+            "insights": insights,
+            "cards": [
+                {
+                    "title": card.title,
+                    "content": card.content,
+                    "news_id": card.news_id,
+                    "news_title": card.news_title,
+                    "news_date": card.news_date,
+                    "key_points": card.key_points
+                }
+                for card in cards
+            ]
         }
         state["reflection_completed"] = True
         

@@ -139,9 +139,9 @@ class PersonaAgent:
         return Persona(
             depth="surface",
             summary=summary or "초기 페르소나 생성됨",
-            characteristics=characteristics[:5] or ["관찰 중"],
-            needs=needs[:3] or ["파악 중"],
-            growth_direction=direction or "탐색 중"
+            characteristics=characteristics[:5] if characteristics else ["현재 상황 파악 중", "감정 상태 관찰 중", "니즈 분석 중"],
+            needs=needs[:3] if needs else ["정서적 지지", "상황 이해", "실질적 도움"],
+            growth_direction=direction if direction else "자기 이해와 수용을 통한 점진적 회복"
         )
     
     def update_persona(

@@ -270,12 +270,15 @@ LIMIT 5"""
         OPTIONAL MATCH (p)-[:AFFECTS]->(co:Cohort)
         OPTIONAL MATCH (i:Initiative)-[:ADDRESSES]->(p)
         OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i)
-        WITH p,
+        WITH n, p,
              collect(DISTINCT c.name) + collect(DISTINCT c2.name) as all_contexts,
              collect(DISTINCT i.name) as initiatives,
              collect(DISTINCT s.name) as stakeholders,
              collect(DISTINCT co.name) as cohorts
         RETURN 
+            n.news_id as news_id,
+            n.title as news_title,
+            n.published_at as news_date,
             p.name as problem,
             all_contexts[..5] as contexts,
             initiatives[..5] as initiatives,
