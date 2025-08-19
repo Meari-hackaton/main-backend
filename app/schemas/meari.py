@@ -182,10 +182,6 @@ class MeariSessionResponse(BaseModel):
         description="공감/성찰 카드"
     )
     persona: PersonaData
-    growth_content: Dict[str, Any] = Field(
-        ...,
-        description="3종 성장 카드"
-    )
     next_action: str = "growth_content"
     
     model_config = ConfigDict(
@@ -200,11 +196,6 @@ class MeariSessionResponse(BaseModel):
                     "reflection": "..."
                 },
                 "persona": "...",
-                "growth_content": {
-                    "information": "...",
-                    "experience": "...",
-                    "support": "..."
-                },
                 "next_action": "growth_content"
             }
         }

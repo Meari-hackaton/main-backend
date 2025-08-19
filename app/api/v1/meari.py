@@ -101,7 +101,6 @@ async def create_meari_session(
             session_id=session_id,
             cards=result.get("cards", {}),
             persona=persona_data,
-            growth_content=result.get("growth_content", {}),
             next_action="growth_content"
         )
         

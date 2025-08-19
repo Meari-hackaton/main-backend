@@ -82,7 +82,7 @@ JSON 응답:"""
         # API 엔드포인트로 요청 타입 판단
         endpoint = request_data.get("endpoint", "")
         
-        if "meari-sessions" in endpoint or request_data.get("type") == "initial":
+        if "meari-sessions" in endpoint or request_data.get("type") == "initial_session":
             return RoutingDecision(
                 request_type="initial_session",
                 required_agents=["empathy", "cypher", "reflection", "persona"],
@@ -93,7 +93,7 @@ JSON 응답:"""
                 }
             )
         
-        elif "growth-contents" in endpoint or request_data.get("type") == "growth":
+        elif "growth-contents" in endpoint or request_data.get("type") == "growth_content":
             return RoutingDecision(
                 request_type="growth_content",
                 required_agents=["growth"],
