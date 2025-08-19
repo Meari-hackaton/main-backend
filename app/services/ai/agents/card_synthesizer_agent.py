@@ -134,21 +134,9 @@ class CardSynthesizerAgent:
         return {
             "type": "empathy",
             "title": "당신의 마음을 이해해요",
-            "main_content": raw_data.get("content", ""),
-            "visual": {
-                "theme": "warm",
-                "color_scheme": ["#FFE5B4", "#FFDAB9"],
-                "icon": "heart"
-            },
-            "quotes_highlight": [
-                {"text": q.get("text", ""), "emphasis": True} 
-                for q in raw_data.get("quotes_used", [])[:3]
-            ],
-            "emotion_tags": raw_data.get("emotion_keywords", []),
-            "interaction": {
-                "can_save": True,
-                "can_share": False
-            }
+            "content": raw_data.get("content", ""),
+            "quotes_used": raw_data.get("quotes_used", [])[:3],
+            "emotion_keywords": raw_data.get("emotion_keywords", [])
         }
     
     def _structure_reflection_card(self, raw_data: Dict) -> Dict[str, Any]:
@@ -156,24 +144,15 @@ class CardSynthesizerAgent:
         return {
             "type": "reflection",
             "title": "당신은 혼자가 아니에요",
-            "main_content": raw_data.get("content", ""),
-            "visual": {
-                "theme": "calm",
-                "color_scheme": ["#E6F3FF", "#D1E9FF"],
-                "icon": "lightbulb"
-            },
-            "structured_insights": {
+            "content": raw_data.get("content", ""),
+            "insights": {
                 "problem": raw_data.get("problem", ""),
                 "causes": raw_data.get("contexts", [])[:3],
                 "solutions": raw_data.get("initiatives", [])[:3],
                 "supporters": raw_data.get("stakeholders", [])[:2],
                 "peers": raw_data.get("affected_groups", [])[:2]
             },
-            "key_message": raw_data.get("insight", ""),
-            "interaction": {
-                "can_save": True,
-                "can_explore_more": True
-            }
+            "key_message": raw_data.get("insight", "")
         }
     
     def _structure_info_card(self, raw_data: Dict) -> Dict[str, Any]:
@@ -183,12 +162,7 @@ class CardSynthesizerAgent:
             "title": raw_data.get("title", "유용한 정보"),
             "search_query": raw_data.get("search_query", ""),
             "summary": raw_data.get("content", ""),
-            "sources": raw_data.get("sources", []),
-            "visual": {
-                "theme": "informative",
-                "color_scheme": ["#F0F8FF", "#E1F5FE"],
-                "icon": "search"
-            }
+            "sources": raw_data.get("sources", [])
         }
     
     def _structure_experience_card(self, raw_data: Dict) -> Dict[str, Any]:
@@ -198,12 +172,7 @@ class CardSynthesizerAgent:
             "title": raw_data.get("title", "오늘의 리츄얼"),
             "activity": raw_data.get("content", ""),
             "duration": "10분 이내",
-            "difficulty": "쉬움",
-            "visual": {
-                "theme": "playful",
-                "color_scheme": ["#FFF9E6", "#FFF3CC"],
-                "icon": "sparkles"
-            }
+            "difficulty": "쉬움"
         }
     
     def _structure_support_card(self, raw_data: Dict) -> Dict[str, Any]:
@@ -214,16 +183,7 @@ class CardSynthesizerAgent:
             "policy_name": raw_data.get("title", ""),
             "description": raw_data.get("content", ""),
             "organization": raw_data.get("organization", ""),
-            "application_url": raw_data.get("application_url", ""),
-            "visual": {
-                "theme": "official",
-                "color_scheme": ["#F5FFF5", "#E8F5E9"],
-                "icon": "building"
-            },
-            "action_button": {
-                "text": "자세히 보기",
-                "url": raw_data.get("application_url", "")
-            }
+            "application_url": raw_data.get("application_url", "")
         }
     
     def _structure_persona(self, raw_data: Dict) -> Dict[str, Any]:
@@ -234,11 +194,7 @@ class CardSynthesizerAgent:
             "summary": raw_data.get("summary", ""),
             "characteristics": raw_data.get("characteristics", []),
             "needs": raw_data.get("needs", []),
-            "growth_direction": raw_data.get("growth_direction", ""),
-            "visual": {
-                "avatar_stage": raw_data.get("depth", "surface"),
-                "color": self._get_persona_color(raw_data.get("depth", "surface"))
-            }
+            "growth_direction": raw_data.get("growth_direction", "")
         }
     
     def _calculate_tree_status(self, count: int) -> Dict[str, Any]:
@@ -259,11 +215,7 @@ class CardSynthesizerAgent:
                     "stage_label": label,
                     "progress": count,
                     "next_milestone": max_count + 1 if max_count < 28 else None,
-                    "percentage": min(count / 28 * 100, 100),
-                    "visual": {
-                        "image": f"tree_{stage}.png",
-                        "color": color
-                    }
+                    "percentage": min(count / 28 * 100, 100)
                 }
         
         return {"stage": "seed", "stage_label": "씨앗", "progress": 0}
@@ -289,17 +241,6 @@ class CardSynthesizerAgent:
             "wisdom": "통합적 지혜"
         }
         return labels.get(depth, "탐색 중")
-    
-    def _get_persona_color(self, depth: str) -> str:
-        """페르소나 색상"""
-        colors = {
-            "surface": "#B0BEC5",
-            "understanding": "#90CAF9",
-            "insight": "#64B5F6",
-            "deep_insight": "#42A5F5",
-            "wisdom": "#2196F3"
-        }
-        return colors.get(depth, "#B0BEC5")
     
     def _extract_source_ids(self, empathy_data: Dict) -> Dict[str, List[str]]:
         """공감 카드 소스 추출"""
