@@ -7,8 +7,8 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-import firebase_admin
-from firebase_admin import credentials, auth
+# import firebase_admin
+# from firebase_admin import credentials, auth
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -25,7 +25,7 @@ from urllib.parse import urlencode
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")
+# FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")
 SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "session")
 SESSION_EXPIRES_DAYS = int(os.getenv("SESSION_EXPIRES_DAYS", "5"))
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
@@ -39,15 +39,15 @@ GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL(.env)가 필요합니다!")
-if not FIREBASE_CREDENTIALS:
-    raise RuntimeError("FIREBASE_CREDENTIALS(.env)가 필요합니다!")
+# if not FIREBASE_CREDENTIALS:
+#     raise RuntimeError("FIREBASE_CREDENTIALS(.env)가 필요합니다!")
 
 # --------------------------------------------------------------
-# Firebase 초기화
+# Firebase 초기화 (임시 비활성화)
 # --------------------------------------------------------------
-if not firebase_admin._apps:
-    cred = credentials.Certificate(FIREBASE_CREDENTIALS)
-    firebase_admin.initialize_app(cred)
+# if not firebase_admin._apps:
+#     cred = credentials.Certificate(FIREBASE_CREDENTIALS)
+#     firebase_admin.initialize_app(cred)
 
 # --------------------------------------------------------------
 # DB 초기화
@@ -89,6 +89,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API 라우터 등록
+from app.api.v1 import meari
+app.include_router(meari.router, prefix="/api/v1")
+
 # --------------------------------------------------------------
 # DB 세션 의존성
 # --------------------------------------------------------------
@@ -114,76 +118,76 @@ async def create_user(db: AsyncSession, provider: str, provider_id: str, email: 
 # --------------------------------------------------------------
 # Firebase 세션 로그인 & 로그아웃 엔드포인트
 # --------------------------------------------------------------
-@app.post("/auth/sessionLogin")
-async def session_login(request: Request, response: Response):
-    body = await request.json()
-    id_token: Optional[str] = body.get("idToken")
-    if not id_token:
-        return JSONResponse({"error": "idToken required"}, status_code=400)
+# @app.post("/auth/sessionLogin")
+# async def session_login(request: Request, response: Response):
+#     body = await request.json()
+#     id_token: Optional[str] = body.get("idToken")
+#     if not id_token:
+#         return JSONResponse({"error": "idToken required"}, status_code=400)
+# 
+#     try:
+#         expires_in = datetime.timedelta(days=SESSION_EXPIRES_DAYS)
+#         session_cookie = auth.create_session_cookie(id_token, expires_in=expires_in)
+#     except Exception:
+#         return JSONResponse({"error": "Failed to create session cookie"}, status_code=401)
+# 
+#     cookie_params = {
+#         "key": SESSION_COOKIE_NAME,
+#         "value": session_cookie,
+#         "httponly": True,
+#         "secure": COOKIE_SECURE,
+#         "samesite": COOKIE_SAMESITE,
+#         "max_age": int(expires_in.total_seconds()),
+#         "path": "/",
+#     }
+#     if COOKIE_DOMAIN:
+#         cookie_params["domain"] = COOKIE_DOMAIN
+# 
+#     response.set_cookie(**cookie_params)
+#     return {"message": "session created"}
 
-    try:
-        expires_in = datetime.timedelta(days=SESSION_EXPIRES_DAYS)
-        session_cookie = auth.create_session_cookie(id_token, expires_in=expires_in)
-    except Exception:
-        return JSONResponse({"error": "Failed to create session cookie"}, status_code=401)
 
-    cookie_params = {
-        "key": SESSION_COOKIE_NAME,
-        "value": session_cookie,
-        "httponly": True,
-        "secure": COOKIE_SECURE,
-        "samesite": COOKIE_SAMESITE,
-        "max_age": int(expires_in.total_seconds()),
-        "path": "/",
-    }
-    if COOKIE_DOMAIN:
-        cookie_params["domain"] = COOKIE_DOMAIN
-
-    response.set_cookie(**cookie_params)
-    return {"message": "session created"}
-
-
-@app.post("/auth/sessionLogout")
-async def session_logout(request: Request, response: Response):
-    session_cookie = request.cookies.get(SESSION_COOKIE_NAME)
-    if session_cookie:
-        try:
-            decoded = auth.verify_session_cookie(session_cookie, check_revoked=False)
-            uid = decoded.get("uid")
-            if uid:
-                auth.revoke_refresh_tokens(uid)
-        except Exception:
-            pass
-
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=COOKIE_DOMAIN if COOKIE_DOMAIN else None)
-    return {"message": "logged out"}
+# @app.post("/auth/sessionLogout")
+# async def session_logout(request: Request, response: Response):
+#     session_cookie = request.cookies.get(SESSION_COOKIE_NAME)
+#     if session_cookie:
+#         try:
+#             decoded = auth.verify_session_cookie(session_cookie, check_revoked=False)
+#             uid = decoded.get("uid")
+#             if uid:
+#                 auth.revoke_refresh_tokens(uid)
+#         except Exception:
+#             pass
+# 
+#     response.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=COOKIE_DOMAIN if COOKIE_DOMAIN else None)
+#     return {"message": "logged out"}
 
 # --------------------------------------------------------------
 # 인증 사용자 확인 유틸
 # --------------------------------------------------------------
-async def verify_firebase_session(request: Request) -> dict:
-    session_cookie = request.cookies.get(SESSION_COOKIE_NAME)
-    if not session_cookie:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        decoded = auth.verify_session_cookie(session_cookie, check_revoked=True)
-        return decoded
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+# async def verify_firebase_session(request: Request) -> dict:
+#     session_cookie = request.cookies.get(SESSION_COOKIE_NAME)
+#     if not session_cookie:
+#         raise HTTPException(status_code=401, detail="Unauthorized")
+#     try:
+#         decoded = auth.verify_session_cookie(session_cookie, check_revoked=True)
+#         return decoded
+#     except Exception:
+#         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
-    decoded = await verify_firebase_session(request)
-    uid = decoded.get("uid")
-    if not uid:
-        raise HTTPException(status_code=401, detail="Invalid session")
-
-    email = decoded.get("email")
-    name = decoded.get("name")
-
-    user = await find_user(db, provider="firebase", provider_id=uid)
-    if not user:
-        user = await create_user(db, provider="firebase", provider_id=uid, email=email, name=name)
-    return user
+# async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+#     decoded = await verify_firebase_session(request)
+#     uid = decoded.get("uid")
+#     if not uid:
+#         raise HTTPException(status_code=401, detail="Invalid session")
+# 
+#     email = decoded.get("email")
+#     name = decoded.get("name")
+# 
+#     user = await find_user(db, provider="firebase", provider_id=uid)
+#     if not user:
+#         user = await create_user(db, provider="firebase", provider_id=uid, email=email, name=name)
+#     return user
 
 
 # --------------------------------------------------------------

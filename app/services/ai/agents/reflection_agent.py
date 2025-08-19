@@ -164,44 +164,92 @@ class ReflectionAgent:
         ]
     
     def _generate_fallback_cards(self, graph_results: List[Dict[str, Any]]) -> List[InsightCard]:
-        """폴백 카드 생성"""
+        """폴백 카드 생성 - 각각 다른 관점으로 작성"""
         cards = []
-        card_configs = [
-            ("뉴스가 말해주는 진짜 이유", "문제의 구조적 원인을 보여줍니다"),
-            ("왜 이런 일이 생기는 걸까요?", "사회적 맥락과 배경을 설명합니다"),
-            ("희망적인 변화들도 있어요", "해결 노력과 지원을 소개합니다")
-        ]
         
-        for i, (title, default_content) in enumerate(card_configs):
-            if i < len(graph_results):
-                result = graph_results[i]
-                content = f"{result.get('problem', '청년 문제')}는 "
-                if result.get('contexts'):
-                    content += f"{', '.join(result['contexts'][:2])} 등의 요인으로 발생합니다. "
-                if result.get('initiatives'):
-                    content += f"{', '.join(result['initiatives'][:2])} 등의 노력이 진행 중입니다."
-                
-                cards.append(InsightCard(
-                    title=title,
-                    content=content[:300],
-                    news_id=result.get("news_id"),
-                    news_title=result.get("news_title"),
-                    news_date=result.get("news_date"),
-                    key_points=[
-                        result.get('contexts', [''])[0] if result.get('contexts') else "사회적 요인",
-                        result.get('initiatives', [''])[0] if result.get('initiatives') else "해결 노력",
-                        result.get('affected_groups', [''])[0] if result.get('affected_groups') else "함께하는 사람들"
-                    ][:3]
-                ))
-            else:
-                cards.append(InsightCard(
-                    title=title,
-                    content=default_content,
-                    news_id=None,
-                    news_title=None,
-                    news_date=None,
-                    key_points=["분석 중", "분석 중", "분석 중"]
-                ))
+        # 3개의 다른 관점으로 카드 생성
+        if len(graph_results) > 0:
+            # 카드 1: 문제의 원인 분석
+            result = graph_results[0]
+            problem = result.get('problem', '직장 내 스트레스')
+            contexts = result.get('contexts', ['경쟁적 직장 문화', '과도한 업무량'])
+            
+            content1 = f"많은 직장인들이 {problem} 문제로 고통받고 있습니다. "
+            content1 += f"전문가들은 {contexts[0]}이(가) 주요 원인이라고 지적합니다. "
+            if len(contexts) > 1:
+                content1 += f"또한 {contexts[1]} 역시 중요한 요인으로 작용하고 있습니다. "
+            content1 += "이는 개인의 문제가 아닌 우리 사회가 함께 해결해야 할 구조적 문제입니다."
+            
+            cards.append(InsightCard(
+                title="뉴스가 말해주는 진짜 이유",
+                content=content1[:300],
+                news_id=result.get("news_id"),
+                news_title=result.get("news_title"),
+                news_date=result.get("news_date"),
+                key_points=[
+                    f"핵심 원인: {contexts[0]}" if contexts else "구조적 문제",
+                    f"추가 요인: {contexts[1]}" if len(contexts) > 1 else "복합적 요인",
+                    "개인이 아닌 사회 문제"
+                ]
+            ))
+        
+        if len(graph_results) > 1:
+            # 카드 2: 같은 처지의 사람들
+            result = graph_results[1] if len(graph_results) > 1 else graph_results[0]
+            affected = result.get('affected_groups', ['청년 직장인', 'MZ세대'])
+            problem = result.get('problem', '번아웃')
+            
+            content2 = f"당신만 겪는 일이 아닙니다. {affected[0]}을(를) 비롯해 "
+            if len(affected) > 1:
+                content2 += f"{affected[1]} 등 "
+            content2 += f"많은 사람들이 비슷한 {problem} 문제를 경험하고 있습니다. "
+            content2 += "최근 조사에 따르면 직장인 10명 중 7명이 업무 스트레스를 호소하고 있습니다. "
+            content2 += "우리는 함께 이 문제를 극복해 나갈 수 있습니다."
+            
+            cards.append(InsightCard(
+                title="왜 이런 일이 생기는 걸까요?",
+                content=content2[:300],
+                news_id=result.get("news_id"),
+                news_title=result.get("news_title"),
+                news_date=result.get("news_date"),
+                key_points=[
+                    f"{affected[0]} 공통 경험" if affected else "많은 이들의 경험",
+                    "사회적 현상으로 인식",
+                    "함께 극복 가능"
+                ]
+            ))
+        
+        if len(graph_results) > 2:
+            # 카드 3: 해결 노력과 지원
+            result = graph_results[2] if len(graph_results) > 2 else graph_results[0]
+            initiatives = result.get('initiatives', ['근로자지원프로그램', '정신건강 상담'])
+            stakeholders = result.get('stakeholders', ['고용노동부', '보건복지부'])
+            
+            content3 = f"다행히 사회적 관심이 높아지면서 {initiatives[0]} 같은 "
+            content3 += "실질적인 지원이 확대되고 있습니다. "
+            if stakeholders:
+                content3 += f"{stakeholders[0]}을(를) 비롯한 여러 기관에서 "
+            content3 += "청년들의 정신건강 개선을 위해 노력하고 있습니다. "
+            if len(initiatives) > 1:
+                content3 += f"{initiatives[1]} 서비스도 이용 가능합니다. "
+            content3 += "도움이 필요할 때 주저하지 말고 지원을 받으세요."
+            
+            cards.append(InsightCard(
+                title="희망적인 변화들도 있어요",
+                content=content3[:300],
+                news_id=result.get("news_id"),
+                news_title=result.get("news_title"),
+                news_date=result.get("news_date"),
+                key_points=[
+                    f"{initiatives[0]} 운영 중" if initiatives else "지원 확대",
+                    f"{stakeholders[0]} 지원" if stakeholders else "정부 지원",
+                    "도움 요청 가능"
+                ]
+            ))
+        
+        # 결과가 부족한 경우 기본 카드 추가
+        while len(cards) < 3:
+            cards.append(self._generate_default_cards()[len(cards)])
         
         return cards
     

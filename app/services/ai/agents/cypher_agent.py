@@ -167,6 +167,9 @@ LIMIT 5"""
         tag_ids = state.get("tag_ids", [])
         tag_id = tag_ids[0] if tag_ids else None
         
+        # cypher_result 초기화
+        cypher_result = None
+        
         # 1차: user_context 기반 쿼리
         if user_context:
             question = f"{user_context}와 관련된 문제와 원인, 해결책을 찾아주세요"
@@ -177,9 +180,21 @@ LIMIT 5"""
             if not results or not self._has_meaningful_results(results):
                 print(f"user_context로 결과 부족. 태그 {tag_id} 기반으로 재시도")
                 results = self._get_tag_based_results(tag_id)
+                # 태그 기반 쿼리에 대한 메타데이터 생성
+                if not cypher_result:
+                    cypher_result = CypherQuery(
+                        query="태그 기반 직접 쿼리",
+                        explanation=f"태그 {tag_id} 기반 구조화된 쿼리",
+                        expected_output="문제와 관련 정보"
+                    )
         else:
             # user_context 없으면 바로 태그 기반
             results = self._get_tag_based_results(tag_id)
+            cypher_result = CypherQuery(
+                query="태그 기반 직접 쿼리",
+                explanation=f"태그 {tag_id} 기반 구조화된 쿼리",
+                expected_output="문제와 관련 정보"
+            )
         
         # 여전히 없으면 최소한의 결과라도 반환
         if not results:
@@ -191,6 +206,13 @@ LIMIT 5"""
                 "stakeholders": [],
                 "affected_groups": ["청년"]
             }]
+            
+            if not cypher_result:
+                cypher_result = CypherQuery(
+                    query="기본 쿼리",
+                    explanation="데이터 없음 - 기본값 사용",
+                    expected_output="기본 응답"
+                )
         
         # 상태 업데이트
         state["cypher_query"] = cypher_result.query
@@ -246,22 +268,27 @@ LIMIT 5"""
         if not tag_id:
             return []
         
-        # 태그별 주요 키워드
+        # 태그별 주요 키워드 및 필터링할 노이즈
         tag_keywords = {
-            2: ['번아웃', '야근', '과로', '스트레스'],
-            3: ['취업', '실업', '구직'],
-            4: ['이직', '전직', '커리어'],
-            6: ['우울', '무기력', '불안'],
-            7: ['건강', '질병', '의료'],
-            8: ['수면', '불면', '피로'],
-            10: ['고립', '외로움', '관계'],
-            11: ['세대', '갈등', '소통'],
-            12: ['인간관계', '대인관계', '소통']
+            2: ['번아웃', '야근', '과로', '스트레스', '피로'],
+            3: ['취업', '실업', '구직', '채용'],
+            4: ['이직', '전직', '커리어', '경력'],
+            6: ['우울', '무기력', '불안', '정신건강'],
+            7: ['건강', '질병', '의료', '병원'],
+            8: ['수면', '불면', '피로', '숙면'],
+            10: ['고립', '외로움', '관계', '소외'],
+            11: ['세대', '갈등', '소통', '이해'],
+            12: ['인간관계', '대인관계', '소통', '관계']
         }
+        
+        # 제외할 노이즈 단어들
+        noise_words = ['신곡', '운동 경기장', '물병자리', '60년생', '쉬었음 청년']
         
         keywords = tag_keywords.get(tag_id, ['청년', '문제'])
         keyword_conditions = ' OR '.join([f'p.name CONTAINS "{kw}"' for kw in keywords])
+        noise_conditions = ' AND '.join([f'NOT c.name CONTAINS "{nw}"' for nw in noise_words])
         
+        # 안전한 기본 쿼리
         query = f"""
         MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p:Problem)
         WHERE {keyword_conditions}
