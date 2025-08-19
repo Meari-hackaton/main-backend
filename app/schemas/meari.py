@@ -8,10 +8,16 @@ from uuid import UUID
 
 class MeariSessionRequest(BaseModel):
     """최초 세션 생성 요청"""
-    selected_tag_ids: List[int] = Field(
+    selected_tag_id: int = Field(
         ..., 
-        description="선택된 태그 ID 리스트 (1-3개)",
-        example=[2, 6, 10]
+        description="선택된 중분류 태그 ID (1개)",
+        ge=2,  # 최소 2 (첫 번째 중분류)
+        le=12  # 최대 12 (마지막 중분류)
+    )
+    user_context: Optional[str] = Field(
+        None,
+        description="사용자가 입력한 구체적인 고민/상황",
+        max_length=500
     )
     user_id: Optional[UUID] = Field(
         None,
@@ -21,7 +27,8 @@ class MeariSessionRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "selected_tag_ids": [2, 6, 10],
+                "selected_tag_id": 2,
+                "user_context": "매일 야근하고 주말에도 일해야 해서 너무 지쳐있어요. 회사를 그만두고 싶은데 다음 직장을 구할 수 있을지 불안합니다.",
                 "user_id": None
             }
         }
