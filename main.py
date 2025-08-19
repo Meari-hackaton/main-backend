@@ -2,58 +2,63 @@ import os
 import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Request, Response, Depends, HTTPException, Cookie
+from fastapi import FastAPI, Request, Response, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Firebase Admin SDK
 import firebase_admin
 from firebase_admin import credentials, auth
 
-# SQLAlchemy (PostgreSQL via DATABASE_URL)
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Text, DateTime, UniqueConstraint, text
-)
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Column, Integer, String, DateTime, UniqueConstraint, text
+from sqlalchemy.future import select
 
-# -----------------------------------------------------------------------------
-# .env 세팅
-# -----------------------------------------------------------------------------
+import httpx
+from urllib.parse import urlencode
+
+
+# --------------------------------------------------------------
+# 환경 변수 로드
+# --------------------------------------------------------------
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")  # 서비스 계정 JSON 파일 경로
-
-# 쿠키/세션 설정
+FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")
 SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "session")
-SESSION_EXPIRES_DAYS = int(os.getenv("SESSION_EXPIRES_DAYS", "5"))  # Firebase 세션 쿠키 만료일수
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"  # HTTPS 환경에서 true 권장
-COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").lower()  # 'lax' | 'strict' | 'none'
-COOKIE_DOMAIN: Optional[str] = os.getenv("COOKIE_DOMAIN")  # 필요 시 도메인 지정
+SESSION_EXPIRES_DAYS = int(os.getenv("SESSION_EXPIRES_DAYS", "5"))
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").lower()
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
 
-# -----------------------------------------------------------------------------
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL(.env)가 필요합니다!")
+if not FIREBASE_CREDENTIALS:
+    raise RuntimeError("FIREBASE_CREDENTIALS(.env)가 필요합니다!")
+
+# --------------------------------------------------------------
 # Firebase 초기화
-# -----------------------------------------------------------------------------
-if not firebase_admin._apps:  # 중복 초기화 방지
-    if not FIREBASE_CREDENTIALS:
-        raise RuntimeError("FIREBASE_CREDENTIALS(.env)가 필요합니다: 서비스 계정 JSON 경로")
+# --------------------------------------------------------------
+if not firebase_admin._apps:
     cred = credentials.Certificate(FIREBASE_CREDENTIALS)
     firebase_admin.initialize_app(cred)
 
-# -----------------------------------------------------------------------------
-# DB 초기화 (SQLAlchemy)
-# -----------------------------------------------------------------------------
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL(.env)가 필요합니다: e.g. postgresql+psycopg2://...")
-
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# --------------------------------------------------------------
+# DB 초기화
+# --------------------------------------------------------------
+engine = create_async_engine(DATABASE_URL, echo=True)
+async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
+
 
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True, index=True)
     provider = Column(String(50), nullable=False)
     provider_id = Column(String(255), nullable=False)
@@ -65,15 +70,17 @@ class User(Base):
         UniqueConstraint("provider", "provider_id", name="uq_provider_provider_id"),
     )
 
-# 테이블 생성
-Base.metadata.create_all(bind=engine)
 
-# -----------------------------------------------------------------------------
-# FastAPI 앱
-# -----------------------------------------------------------------------------
+# 테이블 생성
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+# --------------------------------------------------------------
+# FastAPI 앱 생성 및 미들웨어 설정
+# --------------------------------------------------------------
 app = FastAPI()
 
-# CORS (프론트 도메인에 맞춰 설정)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("CORS_ORIGIN", "*")],
@@ -82,40 +89,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -----------------------------------------------------------------------------
-# DB 유틸
-# -----------------------------------------------------------------------------
-
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# --------------------------------------------------------------
+# DB 세션 의존성
+# --------------------------------------------------------------
+async def get_db() -> AsyncSession:
+    async with async_session() as session:
+        yield session
 
 
-def find_user(db: Session, provider: str, provider_id: str) -> Optional[User]:
-    return db.query(User).filter(User.provider == provider, User.provider_id == provider_id).first()
+# --------------------------------------------------------------
+# DB 조작
+# --------------------------------------------------------------
+async def find_user(db: AsyncSession, provider: str, provider_id: str) -> Optional[User]:
+    result = await db.execute(select(User).filter(User.provider == provider, User.provider_id == provider_id))
+    return result.scalars().first()
 
-
-def create_user(db: Session, provider: str, provider_id: str, email: Optional[str], name: Optional[str]) -> User:
+async def create_user(db: AsyncSession, provider: str, provider_id: str, email: Optional[str], name: Optional[str]) -> User:
     user = User(provider=provider, provider_id=provider_id, email=email, name=name)
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
-
-def find_user_by_id(db: Session, user_id: int) -> Optional[User]:
-    return db.query(User).filter(User.id == user_id).first()
-
-# -----------------------------------------------------------------------------
-# Firebase 기반 세션 로그인 플로우
-#  - 프론트엔드에서 Firebase로 로그인 → idToken을 /auth/sessionLogin에 전달
-#  - 서버는 idToken으로 Firebase 세션쿠키 생성해 HttpOnly 쿠키로 저장
-#  - 이후 요청은 쿠키를 기반으로 인증 (stateless JWT 대신 stateful-like session cookie)
-# -----------------------------------------------------------------------------
-
+# --------------------------------------------------------------
+# Firebase 세션 로그인 & 로그아웃 엔드포인트
+# --------------------------------------------------------------
 @app.post("/auth/sessionLogin")
 async def session_login(request: Request, response: Response):
     body = await request.json()
@@ -123,20 +121,18 @@ async def session_login(request: Request, response: Response):
     if not id_token:
         return JSONResponse({"error": "idToken required"}, status_code=400)
 
-    # 세션 쿠키 생성 (Firebase 관리)
     try:
         expires_in = datetime.timedelta(days=SESSION_EXPIRES_DAYS)
         session_cookie = auth.create_session_cookie(id_token, expires_in=expires_in)
-    except Exception as e:
+    except Exception:
         return JSONResponse({"error": "Failed to create session cookie"}, status_code=401)
 
-    # 쿠키 설정
     cookie_params = {
         "key": SESSION_COOKIE_NAME,
         "value": session_cookie,
         "httponly": True,
         "secure": COOKIE_SECURE,
-        "samesite": COOKIE_SAMESITE,  # cross-site라면 'none' + secure 필요
+        "samesite": COOKIE_SAMESITE,
         "max_age": int(expires_in.total_seconds()),
         "path": "/",
     }
@@ -149,14 +145,12 @@ async def session_login(request: Request, response: Response):
 
 @app.post("/auth/sessionLogout")
 async def session_logout(request: Request, response: Response):
-    # 현재 세션 쿠키 검증 → 해당 uid의 refresh tokens revoke
     session_cookie = request.cookies.get(SESSION_COOKIE_NAME)
     if session_cookie:
         try:
             decoded = auth.verify_session_cookie(session_cookie, check_revoked=False)
             uid = decoded.get("uid")
             if uid:
-                # 모든 기존 세션 무효화
                 auth.revoke_refresh_tokens(uid)
         except Exception:
             pass
@@ -164,45 +158,91 @@ async def session_logout(request: Request, response: Response):
     response.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=COOKIE_DOMAIN if COOKIE_DOMAIN else None)
     return {"message": "logged out"}
 
-# -----------------------------------------------------------------------------
-# 인증된 사용자 유틸
-# -----------------------------------------------------------------------------
-
-def verify_firebase_session(request: Request) -> dict:
+# --------------------------------------------------------------
+# 인증 사용자 확인 유틸
+# --------------------------------------------------------------
+async def verify_firebase_session(request: Request) -> dict:
     session_cookie = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_cookie:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        # check_revoked=True로 설정하면 revoke_refresh_tokens 이후의 쿠키는 거부됨
         decoded = auth.verify_session_cookie(session_cookie, check_revoked=True)
-        return decoded  # { 'uid': '...', 'email': '...', 'name': '...' }
+        return decoded
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-
-def get_current_user(request: Request):
-    decoded = verify_firebase_session(request)
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+    decoded = await verify_firebase_session(request)
     uid = decoded.get("uid")
     if not uid:
         raise HTTPException(status_code=401, detail="Invalid session")
 
     email = decoded.get("email")
     name = decoded.get("name")
-    db = SessionLocal()
-    try:
-        user = find_user(db, provider="firebase", provider_id=uid)
-        if not user:
-            user = create_user(db, provider="firebase", provider_id=uid, email=email, name=name)
-        return user
-    finally:
-        db.close()
 
-# -----------------------------------------------------------------------------
-# API 엔드포인트
-# -----------------------------------------------------------------------------
+    user = await find_user(db, provider="firebase", provider_id=uid)
+    if not user:
+        user = await create_user(db, provider="firebase", provider_id=uid, email=email, name=name)
+    return user
 
-@app.get("/profile")  # 다시 확인해보기 
-def profile(user: User = Depends(get_current_user)):
+
+# --------------------------------------------------------------
+# Google OAuth 로그인
+# --------------------------------------------------------------
+@app.get("/auth/google/login")
+def google_login():
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": "http://localhost:8000/auth/google/callback",
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline"
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return RedirectResponse(url)
+
+
+# --------------------------------------------------------------
+# Google OAuth 콜백 처리
+# --------------------------------------------------------------
+@app.get("/auth/google/callback")
+async def google_callback(code: str = Query(...)):
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": "http://localhost:8000/auth/google/callback",
+                "grant_type": "authorization_code",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        token_resp.raise_for_status()
+        tokens = token_resp.json()
+        access_token = tokens.get("access_token")
+        if not access_token:
+            return JSONResponse({"error": "Failed to get access token"}, status_code=400)
+
+        userinfo_resp = await client.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        userinfo_resp.raise_for_status()
+        user_info = userinfo_resp.json()
+
+    # user_info['sub']: 구글 사용자 고유 ID
+    # 여기서 DB 저장, 세션 생성 등 추가 로직 필요
+
+    return {"message": "Google OAuth 성공", "user_info": user_info}
+
+
+# --------------------------------------------------------------
+# 프로필 조회 -> 삭제?
+# --------------------------------------------------------------
+@app.get("/profile")
+async def profile(user: User = Depends(get_current_user)):
     return {
         "id": user.id,
         "provider": user.provider,
@@ -214,5 +254,4 @@ def profile(user: User = Depends(get_current_user)):
 
 @app.get("/")
 async def root():
-    # 필요 시 프론트 페이지로 리디렉션
     return RedirectResponse(url="/docs")
