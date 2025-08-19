@@ -47,6 +47,12 @@ class CardSynthesizerAgent:
         ]
         
         # API 응답용 형식
+        state["cards"] = {
+            "empathy": empathy_card,
+            "reflection": reflection_card
+        }
+        state["persona"] = persona
+        
         state["final_response"] = {
             "status": "success",
             "session_type": "initial",
@@ -141,18 +147,26 @@ class CardSynthesizerAgent:
     
     def _structure_reflection_card(self, raw_data: Dict) -> Dict[str, Any]:
         """성찰 카드 구조화"""
-        return {
-            "type": "reflection",
-            "title": "당신은 혼자가 아니에요",
-            "content": raw_data.get("content", ""),
-            "insights": {
+        
+        # insights가 이미 구조화되어 있으면 그대로 사용
+        if "insights" in raw_data and isinstance(raw_data["insights"], dict):
+            insights = raw_data["insights"]
+        else:
+            # 기존 방식으로 구조화
+            insights = {
                 "problem": raw_data.get("problem", ""),
                 "causes": raw_data.get("contexts", [])[:3],
                 "solutions": raw_data.get("initiatives", [])[:3],
                 "supporters": raw_data.get("stakeholders", [])[:2],
                 "peers": raw_data.get("affected_groups", [])[:2]
-            },
-            "key_message": raw_data.get("insight", "")
+            }
+        
+        return {
+            "type": "reflection",
+            "title": "당신은 혼자가 아니에요",
+            "content": raw_data.get("content", ""),
+            "insights": insights,
+            "key_message": raw_data.get("insight", "") or insights.get("key_message", "")
         }
     
     def _structure_info_card(self, raw_data: Dict) -> Dict[str, Any]:
