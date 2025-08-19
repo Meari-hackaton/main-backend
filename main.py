@@ -206,8 +206,13 @@ def google_login():
 # Google OAuth 콜백 처리
 # --------------------------------------------------------------
 @app.get("/auth/google/callback")
-async def google_callback(code: str = Query(...)):
+async def google_callback(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    code: str = Query(...)
+):
     async with httpx.AsyncClient() as client:
+        # 1) 구글 인증 토큰 요청
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
             data={
@@ -222,34 +227,61 @@ async def google_callback(code: str = Query(...)):
         token_resp.raise_for_status()
         tokens = token_resp.json()
         access_token = tokens.get("access_token")
-        if not access_token:
-            return JSONResponse({"error": "Failed to get access token"}, status_code=400)
+        id_token = tokens.get("id_token")  # 추가로 id_token도 받아야 Firebase 세션 생성 가능
 
+        if not access_token or not id_token:
+            return JSONResponse({"error": "Failed to get access or ID token"}, status_code=400)
+
+        # 2) 사용자 정보 요청
         userinfo_resp = await client.get(
             "https://openidconnect.googleapis.com/v1/userinfo",
             headers={"Authorization": f"Bearer {access_token}"}
         )
         userinfo_resp.raise_for_status()
         user_info = userinfo_resp.json()
+        google_uid = user_info.get("sub")
+        email = user_info.get("email")
+        name = user_info.get("name")
 
-    # user_info['sub']: 구글 사용자 고유 ID
-    # 여기서 DB 저장, 세션 생성 등 추가 로직 필요
+        if not google_uid:
+            raise HTTPException(status_code=400, detail="Invalid user info from Google")
 
-    return {"message": "Google OAuth 성공", "user_info": user_info}
+    # 3) DB 사용자 조회 및 생성
+    user = await find_user(db, provider="google", provider_id=google_uid)
+    if not user:
+        user = await create_user(db, provider="google", provider_id=google_uid, email=email, name=name)
 
+    # 4) Firebase 사용자 조회 또는 생성
+    try:
+        firebase_user = firebase_auth.get_user_by_email(email)
+    except firebase_auth.UserNotFoundError:
+        firebase_user = firebase_auth.create_user(email=email, display_name=name)
 
-# --------------------------------------------------------------
-# 프로필 조회 -> 삭제?
-# --------------------------------------------------------------
-@app.get("/profile")
-async def profile(user: User = Depends(get_current_user)):
-    return {
-        "id": user.id,
-        "provider": user.provider,
-        "email": user.email,
-        "name": user.name,
-        "created_at": user.created_at,
+    # 5) Firebase 세션 쿠키 생성
+    expires_in = datetime.timedelta(days=SESSION_EXPIRES_DAYS)
+    try:
+        session_cookie = firebase_auth.create_session_cookie(id_token, expires_in=expires_in)
+    except Exception:
+        return JSONResponse({"error": "Failed to create Firebase session cookie"}, status_code=401)
+
+    # 6) 쿠키 세팅 (클라이언트에 세션쿠키 발급)
+    cookie_params = {
+        "key": SESSION_COOKIE_NAME,
+        "value": session_cookie,
+        "httponly": True,
+        "secure": COOKIE_SECURE,
+        "samesite": COOKIE_SAMESITE,
+        "max_age": int(expires_in.total_seconds()),
+        "path": "/",
     }
+    if COOKIE_DOMAIN:
+        cookie_params["domain"] = COOKIE_DOMAIN
+
+    response.set_cookie(**cookie_params)
+
+    # 7) 로그인 완료 응답 (필요에 따라 추가 정보 반환)
+    return {"message": "Google OAuth 및 Firebase 세션 로그인 완료", "user": {"id": user.id, "email": user.email, "name": user.name}}
+
 
 
 @app.get("/")
