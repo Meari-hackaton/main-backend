@@ -33,9 +33,9 @@ class CypherAgent:
         self.examples = [
             {
                 "input": "번아웃의 원인은 무엇인가?",
-                "output": """MATCH (c:Context)-[:CAUSES]->(p:Problem)
+                "output": """MATCH (p:Problem)<-[:AFFECTS]-(c:Context)
 WHERE p.name CONTAINS '번아웃' OR p.id CONTAINS '번아웃'
-RETURN c.name as cause, p.name as problem
+RETURN p.name as problem, collect(DISTINCT c.name) as causes
 LIMIT 5"""
             },
             {
@@ -163,47 +163,34 @@ LIMIT 5"""
     
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """LangGraph 상태 처리"""
-        # user_context와 tag_ids를 활용해 질문 생성
         user_context = state.get("user_context", "")
         tag_ids = state.get("tag_ids", [])
-        
-        # 질문 생성
-        if user_context:
-            question = f"{user_context}와 관련된 문제와 원인, 해결책을 찾아주세요"
-        else:
-            question = "청년들이 겪는 주요 문제와 그 원인, 해결책을 찾아주세요"
-        
-        # 첫 번째 태그 사용
         tag_id = tag_ids[0] if tag_ids else None
         
-        # Cypher 쿼리 생성
-        cypher_result = self.generate_query(question, tag_id)
-        
-        # 쿼리 실행
-        results = self.execute_query(cypher_result.query)
-        
-        # 결과가 없으면 더 넓은 범위로 재시도
-        if not results and tag_id:
-            print(f"결과 없음. 더 넓은 범위로 재시도 (태그 {tag_id})")
-            # 단순한 fallback 쿼리
-            fallback_queries = [
-                # 1차: 해당 태그의 모든 노드
-                f"MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(node) "
-                f"RETURN DISTINCT labels(node)[0] as type, node.name as name, node.id as id LIMIT 10",
-                
-                # 2차: 해당 태그의 Problem 노드만
-                f"MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p:Problem) "
-                f"RETURN p.name as problem, p.id as id LIMIT 5",
-                
-                # 3차: 모든 Problem 노드 (태그 무관)
-                f"MATCH (p:Problem) RETURN p.name as problem LIMIT 5"
-            ]
+        # 1차: user_context 기반 쿼리
+        if user_context:
+            question = f"{user_context}와 관련된 문제와 원인, 해결책을 찾아주세요"
+            cypher_result = self.generate_query(question, tag_id)
+            results = self.execute_query(cypher_result.query)
             
-            for fallback_query in fallback_queries:
-                results = self.execute_query(fallback_query)
-                if results:
-                    print(f"Fallback 쿼리 성공")
-                    break
+            # user_context로 못 찾으면 태그 기반으로 재시도
+            if not results or not self._has_meaningful_results(results):
+                print(f"user_context로 결과 부족. 태그 {tag_id} 기반으로 재시도")
+                results = self._get_tag_based_results(tag_id)
+        else:
+            # user_context 없으면 바로 태그 기반
+            results = self._get_tag_based_results(tag_id)
+        
+        # 여전히 없으면 최소한의 결과라도 반환
+        if not results:
+            print(f"그래프 데이터 없음. 기본 Problem 반환")
+            results = [{
+                "problem": "청년 문제",
+                "contexts": [],
+                "initiatives": [],
+                "stakeholders": [],
+                "affected_groups": ["청년"]
+            }]
         
         # 상태 업데이트
         state["cypher_query"] = cypher_result.query
@@ -238,6 +225,67 @@ LIMIT 5"""
         except Exception as e:
             print(f"쿼리 재생성 실패: {e}")
             return []
+    
+    def _has_meaningful_results(self, results: List[Dict]) -> bool:
+        """의미있는 결과가 있는지 확인"""
+        for result in results:
+            # 최소한 하나의 관계라도 있으면 의미있음
+            if any([
+                result.get('causes', []),
+                result.get('solutions', []),
+                result.get('contexts', []),
+                result.get('initiatives', []),
+                result.get('stakeholders', []),
+                result.get('affected_groups', [])
+            ]):
+                return True
+        return False
+    
+    def _get_tag_based_results(self, tag_id: int) -> List[Dict[str, Any]]:
+        """태그 기반으로 포괄적인 결과 가져오기"""
+        if not tag_id:
+            return []
+        
+        # 태그별 주요 키워드
+        tag_keywords = {
+            2: ['번아웃', '야근', '과로', '스트레스'],
+            3: ['취업', '실업', '구직'],
+            4: ['이직', '전직', '커리어'],
+            6: ['우울', '무기력', '불안'],
+            7: ['건강', '질병', '의료'],
+            8: ['수면', '불면', '피로'],
+            10: ['고립', '외로움', '관계'],
+            11: ['세대', '갈등', '소통'],
+            12: ['인간관계', '대인관계', '소통']
+        }
+        
+        keywords = tag_keywords.get(tag_id, ['청년', '문제'])
+        keyword_conditions = ' OR '.join([f'p.name CONTAINS "{kw}"' for kw in keywords])
+        
+        query = f"""
+        MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p:Problem)
+        WHERE {keyword_conditions}
+        OPTIONAL MATCH (p)<-[:AFFECTS]-(c:Context)
+        OPTIONAL MATCH (p)-[:CAUSES]->(c2:Context)
+        OPTIONAL MATCH (p)-[:AFFECTS]->(co:Cohort)
+        OPTIONAL MATCH (i:Initiative)-[:ADDRESSES]->(p)
+        OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i)
+        WITH p,
+             collect(DISTINCT c.name) + collect(DISTINCT c2.name) as all_contexts,
+             collect(DISTINCT i.name) as initiatives,
+             collect(DISTINCT s.name) as stakeholders,
+             collect(DISTINCT co.name) as cohorts
+        RETURN 
+            p.name as problem,
+            all_contexts[..5] as contexts,
+            initiatives[..5] as initiatives,
+            stakeholders[..3] as stakeholders,
+            cohorts[..3] as affected_groups
+        ORDER BY size(all_contexts) + size(initiatives) DESC
+        LIMIT 3
+        """
+        
+        return self.execute_query(query)
     
     def close(self):
         """드라이버 종료"""
