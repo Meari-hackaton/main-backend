@@ -5,9 +5,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# LangSmith 설정 확인
+if os.getenv("LANGCHAIN_TRACING_V2") == "true":
+    print(f" LangSmith 추적 활성화")
+    print(f" 프로젝트: {os.getenv('LANGCHAIN_PROJECT', 'default')}")
+    print(f" 엔드포인트: {os.getenv('LANGCHAIN_ENDPOINT', 'https://api.smith.langchain.com')}")
+else:
+    print(" LangSmith 추적 비활성화")
+
 class AIConfig(BaseModel):
     """AI 서비스 설정"""
-    
     # Gemini API 설정
     gemini_api_keys: list = Field(default_factory=lambda: [
         k for k in [
