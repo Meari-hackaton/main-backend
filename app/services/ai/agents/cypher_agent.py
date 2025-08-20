@@ -29,41 +29,66 @@ class CypherAgent:
             auth=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
         )
         
-        # Few-shot 예시
+        # Few-shot 예시 - 더 포괄적인 쿼리로 개선 (뉴스 정보 포함)
         self.examples = [
             {
-                "input": "번아웃의 원인은 무엇인가?",
-                "output": """MATCH (p:Problem)<-[:AFFECTS]-(c:Context)
-WHERE p.name CONTAINS '번아웃' OR p.id CONTAINS '번아웃'
-RETURN p.name as problem, collect(DISTINCT c.name) as causes
-LIMIT 5"""
-            },
-            {
-                "input": "취업 문제를 해결하는 정책이나 프로그램은?",
-                "output": """MATCH (i:Initiative)-[:ADDRESSES]->(p:Problem)
-WHERE p.name CONTAINS '취업' OR p.id CONTAINS '취업'
-RETURN i.name as initiative, p.name as problem
-LIMIT 5"""
-            },
-            {
-                "input": "우울증이 영향을 미치는 집단은?",
-                "output": """MATCH (p:Problem)-[:AFFECTS]->(co:Cohort)
-WHERE p.name CONTAINS '우울' OR p.id CONTAINS '우울'
-RETURN p.name as problem, co.name as affected_group
-LIMIT 5"""
-            },
-            {
-                "input": "청년 정책에 관련된 이해관계자는?",
-                "output": """MATCH (s:Stakeholder)-[:INVOLVES]->(i:Initiative)
-WHERE i.name CONTAINS '청년' OR i.id CONTAINS '청년'
-RETURN s.name as stakeholder, i.name as initiative
-LIMIT 5"""
-            },
-            {
-                "input": "태그 1번과 관련된 문제와 해결책은?",
-                "output": """MATCH (n:News {tag_id: 1})-[:CONTAINS]->(p:Problem)
+                "input": "번아웃의 원인과 해결책, 관련된 모든 정보는?",
+                "output": """MATCH (n:News {tag_id: 2})-[:CONTAINS]->(p:Problem)
+WHERE p.name CONTAINS '번아웃'
+OPTIONAL MATCH (p)<-[:AFFECTS|CAUSES]-(c:Context)
 OPTIONAL MATCH (i:Initiative)-[:ADDRESSES]->(p)
-RETURN DISTINCT p.name as problem, collect(DISTINCT i.name) as solutions
+OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i)
+OPTIONAL MATCH (p)-[:AFFECTS]->(co:Cohort)
+RETURN n.news_id as news_id,
+       n.title as news_title,
+       n.published_at as news_date,
+       p.name as problem,
+       collect(DISTINCT c.name) as contexts,
+       collect(DISTINCT i.name) as initiatives,
+       collect(DISTINCT s.name) as stakeholders,
+       collect(DISTINCT co.name) as cohorts
+LIMIT 5"""
+            },
+            {
+                "input": "취업 문제와 관련된 모든 노드와 관계는?",
+                "output": """MATCH (n:News)-[:CONTAINS]->(p:Problem)
+WHERE p.name CONTAINS '취업'
+OPTIONAL MATCH (c:Context)-[:AFFECTS|CAUSES]->(p)
+OPTIONAL MATCH (i:Initiative)-[:ADDRESSES]->(p)
+OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i)
+OPTIONAL MATCH (p)-[:AFFECTS]->(co:Cohort)
+RETURN n.news_id as news_id,
+       n.title as news_title,
+       n.published_at as news_date,
+       p.name as problem,
+       collect(DISTINCT c.name) as contexts,
+       collect(DISTINCT i.name) as initiatives,
+       collect(DISTINCT s.name) as stakeholders,
+       collect(DISTINCT co.name) as cohorts
+LIMIT 5"""
+            },
+            {
+                "input": "문제의 원인(Context)을 찾아줘",
+                "output": """MATCH (p:Problem)<-[:AFFECTS|CAUSES]-(c:Context)
+RETURN p.name as problem, collect(DISTINCT c.name) as contexts
+LIMIT 5"""
+            },
+            {
+                "input": "이해관계자(Stakeholder)를 찾아줘",
+                "output": """MATCH (s:Stakeholder)-[:INVOLVES|ADDRESSES|AFFECTS]-(related)
+RETURN s.name as stakeholder, labels(related)[0] as related_type, collect(related.name) as related_names
+LIMIT 5"""
+            },
+            {
+                "input": "태그 2번과 관련된 포괄적인 정보",
+                "output": """MATCH (n:News {tag_id: 2})-[:CONTAINS]->(node)
+WITH n, labels(node)[0] as node_type, collect(DISTINCT node) as nodes
+RETURN n.news_id as news_id,
+       [x IN nodes WHERE 'Problem' IN labels(x) | x.name] as problems,
+       [x IN nodes WHERE 'Context' IN labels(x) | x.name] as contexts,
+       [x IN nodes WHERE 'Initiative' IN labels(x) | x.name] as initiatives,
+       [x IN nodes WHERE 'Stakeholder' IN labels(x) | x.name] as stakeholders,
+       [x IN nodes WHERE 'Cohort' IN labels(x) | x.name] as cohorts
 LIMIT 5"""
             }
         ]
@@ -108,7 +133,8 @@ LIMIT 5"""
 2. 항상 LIMIT 설정 (기본 5-10개)
 3. tag_id 필터링 가능 (1~9)
 4. OPTIONAL MATCH로 없을 수도 있는 관계 처리
-5. collect()로 여러 결과 집계 가능"""
+5. collect()로 여러 결과 집계 가능
+6. **중요**: News 노드의 news_id, title, published_at 필드를 항상 포함"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -146,6 +172,13 @@ LIMIT 5"""
                 result = session.run(query)
                 data = [dict(record) for record in result]
                 
+                # 디버깅: 실제 쿼리 결과 확인
+                if data:
+                    print(f"\n=== 쿼리 실행 결과 ===")
+                    print(f"결과 개수: {len(data)}")
+                    print(f"첫 번째 레코드 키: {list(data[0].keys()) if data else '없음'}")
+                    print(f"첫 번째 레코드 내용: {data[0] if data else '없음'}")
+                
                 # 결과가 비어있으면 None 대신 빈 리스트 반환
                 return data if data else []
                 
@@ -162,63 +195,72 @@ LIMIT 5"""
                 return []
     
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """LangGraph 상태 처리"""
+        """LangGraph 상태 처리 - 밑힌 에러ㅜㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏ Graph RAG"""
         user_context = state.get("user_context", "")
         tag_ids = state.get("tag_ids", [])
         tag_id = tag_ids[0] if tag_ids else None
         
-        # cypher_result 초기화
-        cypher_result = None
+        # Neo4j 연결 테스트
+        try:
+            with self.driver.session() as session:
+                test_result = session.run("RETURN 1 as test")
+                test_result.single()
+                print("Neo4j 연결 성공")
+        except Exception as e:
+            print(f"Neo4j 연결 실패: {e}")
+            # 폴백 처리
+            state["cypher_query"] = "MOCK"
+            state["graph_results"] = self._get_mock_results(tag_id)
+            state["graph_explanation"] = "Neo4j 연결 실패 - 모의 데이터 사용"
+            return state
         
-        # 1차: user_context 기반 쿼리
-        if user_context:
-            question = f"{user_context}와 관련된 문제와 원인, 해결책을 찾아주세요"
-            cypher_result = self.generate_query(question, tag_id)
-            results = self.execute_query(cypher_result.query)
-            
-            # user_context로 못 찾으면 태그 기반으로 재시도
-            if not results or not self._has_meaningful_results(results):
-                print(f"user_context로 결과 부족. 태그 {tag_id} 기반으로 재시도")
-                results = self._get_tag_based_results(tag_id)
-                # 태그 기반 쿼리에 대한 메타데이터 생성
-                if not cypher_result:
-                    cypher_result = CypherQuery(
-                        query="태그 기반 직접 쿼리",
-                        explanation=f"태그 {tag_id} 기반 구조화된 쿼리",
-                        expected_output="문제와 관련 정보"
-                    )
-        else:
-            # user_context 없으면 바로 태그 기반
-            results = self._get_tag_based_results(tag_id)
-            cypher_result = CypherQuery(
-                query="태그 기반 직접 쿼리",
-                explanation=f"태그 {tag_id} 기반 구조화된 쿼리",
-                expected_output="문제와 관련 정보"
-            )
+        # ===== 진짜 Graph RAG 시작 =====
+        print(f"사용자 컨텍스트: {user_context}")
+        print(f"태그 ID: {tag_id}")
         
-        # 여전히 없으면 최소한의 결과라도 반환
-        if not results:
-            print(f"그래프 데이터 없음. 기본 Problem 반환")
-            results = [{
-                "problem": "청년 문제",
-                "contexts": [],
-                "initiatives": [],
-                "stakeholders": [],
-                "affected_groups": ["청년"]
-            }]
-            
-            if not cypher_result:
-                cypher_result = CypherQuery(
-                    query="기본 쿼리",
-                    explanation="데이터 없음 - 기본값 사용",
-                    expected_output="기본 응답"
-                )
+        # 1단계: 사용자 컨텍스트에서 핵심 질문 생성
+        questions = self._generate_questions_from_context(user_context, tag_id)
+        print(f"생성된 질문들: {questions}")
+        
+        all_results = []
+        all_queries = []
+        
+        # 2단계: 각 질문에 대해 Cypher 쿼리 생성 및 실행
+        for question in questions[:3]:  # 최대 3개 질문
+            try:
+                # LLM이 자연어를 Cypher로 변환해줘 제발
+                cypher_result = self.generate_query(question, tag_id)
+                print(f"\n질문: {question}")
+                print(f"생성된 Cypher: {cypher_result.query[:200]}...")
+                
+                # 쿼리 실행
+                results = self.execute_query(cypher_result.query)
+                print(f"결과: {len(results)}개 노드/관계")
+                
+                if results:
+                    all_results.extend(results)
+                    all_queries.append(cypher_result.query)
+                    
+            except Exception as e:
+                print(f"쿼리 실행 실패: {e}")
+                continue
+        
+        # 3단계: 결과가 없으면 폴백 (태그 기반 검색)
+        if not all_results:
+            print("Graph RAG 결과 없음. 태그 기반 폴백 검색")
+            all_results = self._get_tag_based_results(tag_id)
+            all_queries = ["태그 기반 폴백 쿼리"]
+        
+        # 4단계: 결과 정제 및 구조화
+        structured_results = self._structure_graph_results(all_results)
         
         # 상태 업데이트
-        state["cypher_query"] = cypher_result.query
-        state["graph_results"] = results
-        state["graph_explanation"] = cypher_result.explanation
+        state["cypher_query"] = "\n".join(all_queries) if all_queries else "No query"
+        state["graph_results"] = structured_results
+        state["graph_explanation"] = f"{len(structured_results)}개의 그래프 인사이트 발견"
+        state["cypher_completed"] = True
         
+        print(f"\n최종 구조화된 결과: {len(structured_results)}개")
         return state
     
     def _retry_with_error_feedback(self, failed_query: str, error_msg: str, retry_count: int) -> List[Dict[str, Any]]:
@@ -265,6 +307,7 @@ LIMIT 5"""
     
     def _get_tag_based_results(self, tag_id: int) -> List[Dict[str, Any]]:
         """태그 기반으로 포괄적인 결과 가져오기"""
+        print(f"_get_tag_based_results 호출됨. tag_id: {tag_id}")
         if not tag_id:
             return []
         
@@ -282,40 +325,231 @@ LIMIT 5"""
         }
         
         # 제외할 노이즈 단어들
-        noise_words = ['신곡', '운동 경기장', '물병자리', '60년생', '쉬었음 청년']
+        noise_words = ['신곡', '운동 경기장', '물병자리', '60년생', '쉬었음 청년', '아쿠아리우스']
         
         keywords = tag_keywords.get(tag_id, ['청년', '문제'])
         keyword_conditions = ' OR '.join([f'p.name CONTAINS "{kw}"' for kw in keywords])
-        noise_conditions = ' AND '.join([f'NOT c.name CONTAINS "{nw}"' for nw in noise_words])
         
-        # 안전한 기본 쿼리
+        # News에서 모든 노드 타입을 가져오는 포괄적 쿼리
         query = f"""
         MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p:Problem)
-        WHERE {keyword_conditions}
-        OPTIONAL MATCH (p)<-[:AFFECTS]-(c:Context)
-        OPTIONAL MATCH (p)-[:CAUSES]->(c2:Context)
-        OPTIONAL MATCH (p)-[:AFFECTS]->(co:Cohort)
-        OPTIONAL MATCH (i:Initiative)-[:ADDRESSES]->(p)
-        OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i)
+        WHERE ({keyword_conditions}) 
+        AND NOT p.name IN {noise_words}
+        WITH DISTINCT p, n
+        LIMIT 3
+        
+        // Problem과 연결된 모든 관계 가져오기
+        OPTIONAL MATCH (p)<-[:AFFECTS|CAUSES]-(ctx:Context)
+        OPTIONAL MATCH (ini:Initiative)-[:ADDRESSES]->(p)
+        OPTIONAL MATCH (stake:Stakeholder)-[:INVOLVES]->(ini)
+        OPTIONAL MATCH (p)-[:AFFECTS]->(coh:Cohort)
+        
+        // News에서 직접 연결된 노드들도 확인
+        OPTIONAL MATCH (n)-[:CONTAINS]->(ctx2:Context)
+        OPTIONAL MATCH (n)-[:CONTAINS]->(stake2:Stakeholder)
+        
         WITH n, p,
-             collect(DISTINCT c.name) + collect(DISTINCT c2.name) as all_contexts,
-             collect(DISTINCT i.name) as initiatives,
-             collect(DISTINCT s.name) as stakeholders,
-             collect(DISTINCT co.name) as cohorts
+             collect(DISTINCT ctx.name) + collect(DISTINCT ctx2.name) as all_contexts,
+             collect(DISTINCT ini.name) as initiatives,
+             collect(DISTINCT stake.name) + collect(DISTINCT stake2.name) as all_stakeholders,
+             collect(DISTINCT coh.name) as cohorts
+        
         RETURN 
             n.news_id as news_id,
             n.title as news_title,
             n.published_at as news_date,
-            p.name as problem,
-            all_contexts[..5] as contexts,
-            initiatives[..5] as initiatives,
-            stakeholders[..3] as stakeholders,
-            cohorts[..3] as affected_groups
-        ORDER BY size(all_contexts) + size(initiatives) DESC
-        LIMIT 3
+                 p.name as problem,
+            [x IN all_contexts WHERE x IS NOT NULL AND NOT x IN {noise_words}][..5] as contexts,
+            [x IN initiatives WHERE x IS NOT NULL][..5] as initiatives,
+            [x IN all_stakeholders WHERE x IS NOT NULL][..3] as stakeholders,
+            [x IN cohorts WHERE x IS NOT NULL][..3] as affected_groups
+        ORDER BY size(all_contexts) + size(initiatives) + size(all_stakeholders) DESC
         """
         
-        return self.execute_query(query)
+        print(f"실행할 쿼리: {query[:200]}...")  # 쿼리 일부만 출력
+        results = self.execute_query(query)
+        print(f"쿼리 결과: {len(results)}개")
+        
+        # 결과가 부족하면 모의 데이터로 보충
+        if len(results) < 3:
+            print(f"실제 데이터 부족 ({len(results)}개), 모의 데이터로 보충")
+            mock_results = self._get_mock_results(tag_id)
+            results.extend(mock_results[:3-len(results)])
+        
+        return results[:3]
+    
+    def _get_mock_results(self, tag_id: int) -> List[Dict[str, Any]]:
+        """Neo4j 연결 실패 시 모의 데이터 반환"""
+        mock_data = {
+            2: [  # 직장 내 번아웃
+                {
+                    "problem": "번아웃",
+                    "contexts": ["과도한 업무량", "성과 압박", "워라밸 부재"],
+                    "initiatives": ["근로자지원프로그램(EAP)", "유연근무제", "정신건강 상담"],
+                    "stakeholders": ["고용노동부", "근로복지공단"],
+                    "affected_groups": ["MZ세대 직장인", "청년 근로자"]
+                },
+                {
+                    "problem": "직무 스트레스",
+                    "contexts": ["경쟁적 조직문화", "불안정한 고용", "낮은 자율성"],
+                    "initiatives": ["스트레스 관리 프로그램", "조직문화 개선"],
+                    "stakeholders": ["기업 인사팀", "산업안전보건공단"],
+                    "affected_groups": ["신입사원", "중간관리자"]
+                },
+                {
+                    "problem": "퇴사 고민",
+                    "contexts": ["성장 기회 부족", "비전 부재", "보상 불만족"],
+                    "initiatives": ["경력개발 지원", "멘토링 프로그램"],
+                    "stakeholders": ["기업", "고용센터"],
+                    "affected_groups": ["2-3년차 직장인"]
+                }
+            ]
+        }
+        
+        return mock_data.get(tag_id, [
+            {
+                "problem": "청년 문제",
+                "contexts": ["사회구조적 요인"],
+                "initiatives": ["정부 지원 정책"],
+                "stakeholders": ["관련 기관"],
+                "affected_groups": ["청년층"]
+            }
+        ])
+    
+    def _generate_questions_from_context(self, user_context: str, tag_id: Optional[int] = None) -> List[str]:
+        """사용자 컨텍스트에서 그래프 탐색을 위한 질문 생성"""
+        
+        # 태그별 핵심 키워드
+        tag_focus = {
+            2: "번아웃, 야근, 과로",
+            3: "취업, 실업, 구직",
+            4: "이직, 전직, 커리어",
+            6: "우울, 무기력, 정신건강",
+            7: "건강, 질병, 의료",
+            8: "수면, 불면, 피로",
+            10: "고립, 외로움, 관계",
+            11: "세대, 갈등, 소통",
+            12: "인간관계, 대인관계"
+        }
+        
+        focus = tag_focus.get(tag_id, "청년 문제")
+        
+        prompt = f"""
+        사용자 상황: {user_context}
+        관련 주제: {focus}
+        
+        이 상황에서 Neo4j 그래프 DB를 탐색하기 위한 핵심 질문 3개를 생성하세요.
+        각 질문은 다른 관점에서 접근해야 합니다:
+        1. 문제의 원인 탐색
+        2. 해결책이나 지원 탐색
+        3. 영향받는 집단이나 관련 이해관계자 탐색
+        
+        한 줄씩 작성하세요:
+        """
+        
+        try:
+            response = self.llm.invoke(prompt)
+            questions = response.content.strip().split('\n')
+            # 번호나 불필요한 문자 제거
+            questions = [q.strip().lstrip('1234567890.-) ') for q in questions if q.strip()]
+            return questions[:3]
+        except Exception as e:
+            print(f"질문 생성 실패: {e}")
+            # 폴백 질문들
+            return [
+                f"{focus}의 원인은 무엇인가?",
+                f"{focus}를 해결하는 정책이나 프로그램은?",
+                f"{focus}로 영향받는 집단은?"
+            ]
+    
+    def _structure_graph_results(self, raw_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """그래프 쿼리 결과를 구조화"""
+        
+        print(f"\n=== _structure_graph_results 시작 ===")
+        print(f"raw_results 개수: {len(raw_results)}")
+        if raw_results:
+            print(f"첫 번째 raw_result: {raw_results[0]}")
+        
+        structured = []
+        seen_problems = set()
+        
+        for i, result in enumerate(raw_results):
+            print(f"\n처리 중인 result {i+1}: {list(result.keys())}")
+            
+            # 각 결과에서 의미있는 정보 추출
+            problem = result.get('problem') or result.get('problem_name')
+            
+            if problem and problem not in seen_problems:
+                seen_problems.add(problem)
+                
+                structured_item = {
+                    'problem': problem,
+                    'contexts': [],
+                    'initiatives': [],
+                    'stakeholders': [],
+                    'affected_groups': [],
+                    'news_id': None,
+                    'news_title': None,
+                    'news_date': None
+                }
+                
+                # 컨텍스트 (원인) 수집
+                for key in ['contexts', 'causes', 'cause', 'direct_cause', 'causes_of_burnout']:
+                    if key in result:
+                        value = result[key]
+                        print(f"  {key}: {value}")
+                        if isinstance(value, list):
+                            structured_item['contexts'].extend([v for v in value if v])
+                        elif value:
+                            structured_item['contexts'].append(value)
+                
+                # 이니셔티브 (해결책) 수집
+                for key in ['initiatives', 'solutions', 'solution', 'initiative', 'initiatives_addressing_burnout']:
+                    if key in result:
+                        value = result[key]
+                        print(f"  {key}: {value}")
+                        if isinstance(value, list):
+                            structured_item['initiatives'].extend([v for v in value if v])
+                        elif value:
+                            structured_item['initiatives'].append(value)
+                
+                # 이해관계자 수집
+                for key in ['stakeholders', 'stakeholder', 'involved', 'stakeholders_involved']:
+                    if key in result:
+                        value = result[key]
+                        print(f"  {key}: {value}")
+                        if isinstance(value, list):
+                            structured_item['stakeholders'].extend([v for v in value if v])
+                        elif value:
+                            structured_item['stakeholders'].append(value)
+                
+                # 영향받는 집단 수집
+                for key in ['affected_groups', 'affected_group', 'affected', 'cohorts', 'affected_cohorts', 'affected_cohort_leaving']:
+                    if key in result:
+                        value = result[key]
+                        print(f"  {key}: {value}")
+                        if isinstance(value, list):
+                            structured_item['affected_groups'].extend([v for v in value if v])
+                        elif value:
+                            structured_item['affected_groups'].append(value)
+                
+                # 뉴스 정보
+                structured_item['news_id'] = result.get('news_id')
+                structured_item['news_title'] = result.get('news_title')
+                structured_item['news_date'] = str(result.get('news_date')) if result.get('news_date') else None
+                # news_link는 Neo4j에 없으므로 ReflectionAgent에서 PostgreSQL 조회
+                
+                # 중복 제거 및 정제
+                structured_item['contexts'] = list(set(filter(None, structured_item['contexts'])))[:5]
+                structured_item['initiatives'] = list(set(filter(None, structured_item['initiatives'])))[:5]
+                structured_item['stakeholders'] = list(set(filter(None, structured_item['stakeholders'])))[:3]
+                structured_item['affected_groups'] = list(set(filter(None, structured_item['affected_groups'])))[:3]
+                
+                print(f"구조화된 결과: {structured_item}")
+                structured.append(structured_item)
+        
+        print(f"\n최종 structured 개수: {len(structured)}")
+        return structured[:3]  # 최대 3개 문제만 반환
     
     def close(self):
         """드라이버 종료"""

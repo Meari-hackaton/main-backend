@@ -157,19 +157,33 @@ class MeariWorkflow:
         
         with ThreadPoolExecutor(max_workers=2) as executor:
             # 병렬 실행
-            empathy_future = executor.submit(self.empathy.process, state)
-            cypher_future = executor.submit(self.cypher.process, state)
+            empathy_future = executor.submit(self.empathy.process, state.copy())
+            cypher_future = executor.submit(self.cypher.process, state.copy())
             
             # 결과 수집
             empathy_result = empathy_future.result()
             cypher_result = cypher_future.result()
             
-            # 상태 병합
-            state["empathy_card"] = empathy_result.get("empathy_card", {})
-            state["cypher_query"] = cypher_result.get("cypher_query", "")
-            state["graph_results"] = cypher_result.get("graph_results", [])
+            # 상태 병합 - 각 에이전트의 모든 업데이트를 병합
+            # Empathy 에이전트의 업데이트 병합
+            for key, value in empathy_result.items():
+                if value is not None and key in state:
+                    state[key] = value
+            
+            # Cypher 에이전트의 업데이트 병합
+            for key, value in cypher_result.items():
+                if value is not None and key in state:
+                    state[key] = value
+            
+            # 완료 플래그 설정
             state["empathy_completed"] = True
             state["cypher_completed"] = True
+            
+            # 디버깅: 병합 후 상태 확인
+            print(f"\n=== 병렬 실행 후 상태 병합 ===")
+            print(f"graph_results 개수: {len(state.get('graph_results', []))}")
+            if state.get('graph_results'):
+                print(f"첫 번째 graph_result: {state['graph_results'][0]}")
             
         return state
     

@@ -2,6 +2,9 @@ from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from app.models.news import News
 import os
 
 
@@ -11,7 +14,9 @@ class InsightCard(BaseModel):
     content: str = Field(description="카드 내용 (200-300자)")
     news_id: Optional[str] = Field(description="관련 뉴스 ID")
     news_title: Optional[str] = Field(description="관련 뉴스 제목")
+    news_provider: Optional[str] = Field(description="언론사")
     news_date: Optional[str] = Field(description="관련 뉴스 날짜")
+    news_link: Optional[str] = Field(description="뉴스 링크")
     key_points: List[str] = Field(description="핵심 포인트 3개")
     
 class ReflectionCards(BaseModel):
@@ -30,6 +35,33 @@ class ReflectionAgent:
         )
         
         self.prompt = self._create_prompt()
+        
+        # 동기 데이터베이스 연결 설정
+        database_url = os.getenv("DATABASE_URL")
+        if database_url and "asyncpg" in database_url:
+            database_url = database_url.replace("postgresql+asyncpg", "postgresql")
+        
+        self.engine = create_engine(database_url)
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+    
+    def _get_news_info_sync(self, news_id: str) -> Dict[str, Any]:
+        """뉴스 ID로 뉴스 정보 조회 (동기 버전)"""
+        if not news_id:
+            return {}
+        
+        with self.SessionLocal() as session:
+            result = session.execute(
+                select(News).where(News.news_id == news_id)
+            )
+            news = result.scalar_one_or_none()
+            if news:
+                return {
+                    "title": news.title,
+                    "provider": news.provider,
+                    "published_at": news.published_at.strftime("%Y년 %m월 %d일") if news.published_at else "",
+                    "link_url": news.link_url
+                }
+        return {}
     
     def _create_prompt(self) -> ChatPromptTemplate:
         """성찰 카드 생성 프롬프트"""
@@ -48,10 +80,25 @@ class ReflectionAgent:
 2. "왜 이런 일이 생기는 걸까요?" - 사회적 맥락과 배경
 3. "희망적인 변화들도 있어요" - 해결 노력과 지원
 
-## 각 카드 구성:
-- 제목: 15-20자
-- 내용: 200-300자
-- 핵심 포인트: 3개 (각 20자 내외)"""
+## 응답 형식:
+반드시 다음과 같은 JSON 배열 형식으로만 응답하세요:
+[
+  {{
+    "title": "카드 제목",
+    "content": "카드 내용 (200-300자)",
+    "key_points": ["포인트1", "포인트2", "포인트3"]
+  }},
+  {{
+    "title": "카드 제목",
+    "content": "카드 내용 (200-300자)",
+    "key_points": ["포인트1", "포인트2", "포인트3"]
+  }},
+  {{
+    "title": "카드 제목",
+    "content": "카드 내용 (200-300자)",
+    "key_points": ["포인트1", "포인트2", "포인트3"]
+  }}
+]"""
         
         human_template = """다음 3개의 그래프 분석 결과로 각각 다른 인사이트 카드를 작성하세요:
 
@@ -59,7 +106,7 @@ class ReflectionAgent:
 
 사용자 상황: {user_context}
 
-3개의 인사이트 카드를 JSON 형식으로 작성:"""
+위의 JSON 형식으로만 응답하세요. 다른 설명은 추가하지 마세요:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -93,16 +140,27 @@ class ReflectionAgent:
             })
         
         # LLM으로 카드 생성
-        chain = self.prompt | self.llm
-        response = chain.invoke({
-            "graph_results": str(formatted_results),
-            "user_context": user_context
-        })
-        
-        # 응답 파싱하여 카드 생성
         try:
+            chain = self.prompt | self.llm
+            response = chain.invoke({
+                "graph_results": str(formatted_results),
+                "user_context": user_context
+            })
+            
+            # 응답 파싱하여 카드 생성
             import json
-            cards_data = json.loads(response.content)
+            # response.content에서 JSON만 추출 (혹시 다른 텍스트가 있을 경우)
+            content = response.content.strip()
+            if content.startswith('[') and content.endswith(']'):
+                cards_data = json.loads(content)
+            else:
+                # JSON 배열 부분만 추출 시도
+                start_idx = content.find('[')
+                end_idx = content.rfind(']') + 1
+                if start_idx != -1 and end_idx > start_idx:
+                    cards_data = json.loads(content[start_idx:end_idx])
+                else:
+                    raise ValueError("JSON 배열을 찾을 수 없음")
             
             cards = []
             card_titles = [
@@ -114,12 +172,21 @@ class ReflectionAgent:
             for i, (result, title) in enumerate(zip(graph_results[:3], card_titles)):
                 card_data = cards_data[i] if i < len(cards_data) else {}
                 
+                # 뉴스 정보 조회
+                news_id = result.get("news_id")
+                if news_id:
+                    news_info = self._get_news_info_sync(news_id)
+                else:
+                    news_info = {}
+                
                 card = InsightCard(
                     title=card_data.get("title", title),
                     content=card_data.get("content", f"{result.get('problem', '문제')}에 대한 분석"),
-                    news_id=result.get("news_id"),
-                    news_title=result.get("news_title"),
-                    news_date=result.get("news_date"),
+                    news_id=news_id,
+                    news_title=news_info.get("title") or result.get("news_title"),
+                    news_provider=news_info.get("provider"),
+                    news_date=news_info.get("published_at") or result.get("news_date"),
+                    news_link=news_info.get("link_url"),  # PostgreSQL에서만 가져옴
                     key_points=card_data.get("key_points", [
                         f"{result.get('contexts', [''])[0]}" if result.get('contexts') else "사회적 요인",
                         f"{result.get('initiatives', [''])[0]}" if result.get('initiatives') else "해결 노력",
@@ -131,7 +198,7 @@ class ReflectionAgent:
             return cards
             
         except Exception as e:
-            print(f"카드 파싱 실패: {e}")
+            print(f"카드 생성 실패: {e}")
             return self._generate_fallback_cards(graph_results)
     
     def _generate_default_cards(self) -> List[InsightCard]:
@@ -180,12 +247,21 @@ class ReflectionAgent:
                 content1 += f"또한 {contexts[1]} 역시 중요한 요인으로 작용하고 있습니다. "
             content1 += "이는 개인의 문제가 아닌 우리 사회가 함께 해결해야 할 구조적 문제입니다."
             
+            # 뉴스 정보 조회
+            news_id = result.get("news_id")
+            if news_id:
+                news_info = self._get_news_info_sync(news_id)
+            else:
+                news_info = {}
+            
             cards.append(InsightCard(
                 title="뉴스가 말해주는 진짜 이유",
                 content=content1[:300],
-                news_id=result.get("news_id"),
-                news_title=result.get("news_title"),
-                news_date=result.get("news_date"),
+                news_id=news_id,
+                news_title=news_info.get("title") or result.get("news_title"),
+                news_provider=news_info.get("provider"),
+                news_date=news_info.get("published_at") or result.get("news_date"),
+                news_link=news_info.get("link_url"),
                 key_points=[
                     f"핵심 원인: {contexts[0]}" if contexts else "구조적 문제",
                     f"추가 요인: {contexts[1]}" if len(contexts) > 1 else "복합적 요인",
@@ -206,12 +282,21 @@ class ReflectionAgent:
             content2 += "최근 조사에 따르면 직장인 10명 중 7명이 업무 스트레스를 호소하고 있습니다. "
             content2 += "우리는 함께 이 문제를 극복해 나갈 수 있습니다."
             
+            # 뉴스 정보 조회
+            news_id = result.get("news_id")
+            if news_id:
+                news_info = self._get_news_info_sync(news_id)
+            else:
+                news_info = {}
+            
             cards.append(InsightCard(
                 title="왜 이런 일이 생기는 걸까요?",
                 content=content2[:300],
-                news_id=result.get("news_id"),
-                news_title=result.get("news_title"),
-                news_date=result.get("news_date"),
+                news_id=news_id,
+                news_title=news_info.get("title") or result.get("news_title"),
+                news_provider=news_info.get("provider"),
+                news_date=news_info.get("published_at") or result.get("news_date"),
+                news_link=news_info.get("link_url"),
                 key_points=[
                     f"{affected[0]} 공통 경험" if affected else "많은 이들의 경험",
                     "사회적 현상으로 인식",
@@ -234,12 +319,21 @@ class ReflectionAgent:
                 content3 += f"{initiatives[1]} 서비스도 이용 가능합니다. "
             content3 += "도움이 필요할 때 주저하지 말고 지원을 받으세요."
             
+            # 뉴스 정보 조회
+            news_id = result.get("news_id")
+            if news_id:
+                news_info = self._get_news_info_sync(news_id)
+            else:
+                news_info = {}
+            
             cards.append(InsightCard(
                 title="희망적인 변화들도 있어요",
                 content=content3[:300],
-                news_id=result.get("news_id"),
-                news_title=result.get("news_title"),
-                news_date=result.get("news_date"),
+                news_id=news_id,
+                news_title=news_info.get("title") or result.get("news_title"),
+                news_provider=news_info.get("provider"),
+                news_date=news_info.get("published_at") or result.get("news_date"),
+                news_link=news_info.get("link_url"),
                 key_points=[
                     f"{initiatives[0]} 운영 중" if initiatives else "지원 확대",
                     f"{stakeholders[0]} 지원" if stakeholders else "정부 지원",
@@ -259,6 +353,14 @@ class ReflectionAgent:
         # CypherAgent 결과 가져오기
         graph_results = state.get("graph_results", [])
         user_context = state.get("user_context", "")
+        
+        # 디버깅: graph_results 확인
+        print(f"\n=== ReflectionAgent: graph_results 받음 ===")
+        print(f"graph_results 개수: {len(graph_results)}")
+        if graph_results:
+            print(f"첫 번째 결과: {graph_results[0]}")
+        else:
+            print("graph_results가 비어있음!")
         
         # 3개의 인사이트 카드 생성
         cards = self.generate_reflection_cards(graph_results, user_context)
@@ -304,7 +406,9 @@ class ReflectionAgent:
                     "content": card.content,
                     "news_id": card.news_id,
                     "news_title": card.news_title,
+                    "news_provider": card.news_provider,
                     "news_date": card.news_date,
+                    "news_link": card.news_link,
                     "key_points": card.key_points
                 }
                 for card in cards

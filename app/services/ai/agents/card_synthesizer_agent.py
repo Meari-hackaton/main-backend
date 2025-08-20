@@ -137,12 +137,36 @@ class CardSynthesizerAgent:
     
     def _structure_empathy_card(self, raw_data: Dict) -> Dict[str, Any]:
         """공감 카드 구조화"""
+        # EmpathyAgent에서 개선된 구조로 cards 배열이 있는지 확인
+        cards = raw_data.get("cards", [])
+        
+        # quotes_used 가져오기
+        quotes = raw_data.get("quotes_used", [])[:3]
+        
+        # 각 인용문에 뉴스 정보가 있는지 확인하고 포맷팅
+        formatted_quotes = []
+        for quote in quotes:
+            formatted_quote = {
+                "text": quote.get("text", ""),
+                "speaker": quote.get("speaker", ""),
+                "news_id": quote.get("news_id", ""),
+                "tag_id": quote.get("tag_id", ""),
+                "similarity_score": quote.get("similarity_score", 0)
+            }
+            
+            # news_info가 있으면 추가
+            if "news_info" in quote:
+                formatted_quote["news_info"] = quote["news_info"]
+            
+            formatted_quotes.append(formatted_quote)
+        
         return {
             "type": "empathy",
             "title": "당신의 마음을 이해해요",
             "content": raw_data.get("content", ""),
-            "quotes_used": raw_data.get("quotes_used", [])[:3],
-            "emotion_keywords": raw_data.get("emotion_keywords", [])
+            "quotes_used": formatted_quotes,
+            "emotion_keywords": raw_data.get("emotion_keywords", []),
+            "cards": cards  # 개별 카드 정보 (뉴스 정보 포함)
         }
     
     def _structure_reflection_card(self, raw_data: Dict) -> Dict[str, Any]:
@@ -161,12 +185,16 @@ class CardSynthesizerAgent:
                 "peers": raw_data.get("affected_groups", [])[:2]
             }
         
+        # cards 배열이 있으면 포함 (뉴스 정보 포함)
+        cards = raw_data.get("cards", [])
+        
         return {
             "type": "reflection",
             "title": "당신은 혼자가 아니에요",
             "content": raw_data.get("content", ""),
             "insights": insights,
-            "key_message": raw_data.get("insight", "") or insights.get("key_message", "")
+            "key_message": raw_data.get("insight", "") or insights.get("key_message", ""),
+            "cards": cards  # 개별 카드 정보 (뉴스 정보 포함)
         }
     
     def _structure_info_card(self, raw_data: Dict) -> Dict[str, Any]:
