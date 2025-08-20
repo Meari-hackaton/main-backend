@@ -2,15 +2,42 @@
 
 청년의 마음 건강을 위한 AI 심리회복 서비스 백엔드
 
+## 🚀 빠른 시작 (Docker Compose 사용 - 권장)
+
+### 팀원을 위한 가장 간단한 실행 방법
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/your-org/meari-backend.git
+cd meari-backend
+
+# 2. .env 파일 받기 (팀 리더에게 요청)
+# .env 파일을 프로젝트 루트에 저장
+
+# 3. Docker Compose로 전체 환경 실행 (PostgreSQL 포함)
+docker-compose -f docker-compose-simple.yml up
+
+# 서버가 http://localhost:8000 에서 실행됩니다
+# API 문서: http://localhost:8000/docs
+```
+
+**Docker 설치 필요**: [Docker Desktop 다운로드](https://www.docker.com/products/docker-desktop/)
+
+### psql 없이도 작동합니다!
+- Docker Compose가 PostgreSQL을 자동으로 설정
+- 887개 뉴스, 3,977개 정책 등 모든 데이터 자동 로드
+- Neo4j, Milvus는 클라우드 서비스 사용 (.env 파일에 설정됨)
+
+---
+
 ## 📋 목차
 1. [프로젝트 개요](#프로젝트-개요)
 2. [기술 스택](#기술-스택)
-3. [시작하기](#시작하기)
-4. [환경 설정](#환경-설정)
-5. [데이터베이스 설정](#데이터베이스-설정)
-6. [서버 실행](#서버-실행)
-7. [API 문서](#api-문서)
-8. [트러블슈팅](#트러블슈팅)
+3. [설치 방법 선택](#설치-방법-선택)
+4. [Docker 사용 (권장)](#docker-사용-권장)
+5. [로컬 설치](#로컬-설치)
+6. [API 문서](#api-문서)
+7. [트러블슈팅](#트러블슈팅)
 
 ## 프로젝트 개요
 
@@ -25,17 +52,70 @@
 - **Framework**: FastAPI 0.116.1
 - **Database**: PostgreSQL + SQLAlchemy 2.0
 - **Vector DB**: Milvus (Zilliz Cloud)
-- **Graph DB**: Neo4j
+- **Graph DB**: Neo4j (Aura Cloud)
 - **AI/LLM**: Google Gemini, LangChain, LangGraph
 - **Embedding**: KURE-v1 (한국어 특화)
-- **Python**: 3.11+
+- **Python**: 3.12 (Docker) / 3.11+ (로컬)
 
-## 시작하기
+## 설치 방법 선택
+
+### 방법 1: Docker 사용 (권장) ✅
+- PostgreSQL 설치 불필요
+- 모든 데이터 자동 로드
+- 팀원 간 환경 일치 보장
+
+### 방법 2: 로컬 설치
+- Python 가상환경 사용
+- PostgreSQL 별도 설치 필요
+- 개발 시 더 빠른 반응 속도
+
+## Docker 사용 (권장)
+
+### 필요한 파일
+팀 리더로부터 받아야 할 파일:
+1. **`.env`** - 환경 변수 파일 (API 키, 클라우드 DB 연결 정보)
+2. **`meari_db_dump.sql`** - PostgreSQL 초기 데이터 (7.2MB)
+
+### Docker Compose 파일 2종
+
+#### 1. 개발/일반 사용 (docker-compose-simple.yml)
+```bash
+# 단일 앱 인스턴스 실행
+docker-compose -f docker-compose-simple.yml up
+
+# 백그라운드 실행
+docker-compose -f docker-compose-simple.yml up -d
+
+# 로그 확인
+docker-compose -f docker-compose-simple.yml logs -f app
+
+# 종료
+docker-compose -f docker-compose-simple.yml down
+```
+
+#### 2. 30명 동시 테스트용 (docker-compose.yml)
+```bash
+# 6개 앱 인스턴스 + Nginx 로드밸런서
+docker-compose up
+
+# 30명 동시 테스트 실행
+./test_concurrent_30.sh
+```
+
+### Docker 환경 초기화
+```bash
+# 모든 컨테이너와 볼륨 삭제 (데이터 초기화)
+docker-compose down -v
+
+# 다시 시작 (데이터 자동 재로드)
+docker-compose -f docker-compose-simple.yml up
+```
+
+## 로컬 설치
 
 ### 필수 준비사항
-- Python 3.11+ (3.10도 가능)
+- Python 3.11+ (3.13은 호환성 문제 있음)
 - PostgreSQL 15+
-- Neo4j 5.0+ (로컬 또는 Docker)
 - Git
 
 ### 1. 저장소 클론
@@ -61,151 +141,92 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## 환경 설정
+### 4. PostgreSQL 설정
 
-### 필요한 파일들
-프로젝트 관리자로부터 다음 파일들을 받아야 합니다:
-
-1. **`.env`** - 환경 변수 파일 (API 키, 클라우드 DB 연결 정보)
-   - Gemini, 빅카인즈, 청년정책 API 키
-   - Milvus (Zilliz Cloud) 연결 정보
-   - Neo4j Aura Cloud 연결 정보
-   - OAuth 설정 (Google, Kakao)
-
-2. **`meari_db_dump.sql`** - PostgreSQL 초기 데이터 (6.9MB)
-   - 887개 뉴스 데이터
-   - 3,977개 청년정책 데이터  
-   - 877개 인용문 데이터
-   - 태그 및 기타 마스터 데이터
-
-**중요**: 이 파일들은 절대 Git에 커밋하지 마세요!
-
-### 클라우드 서비스 상태
-- **Milvus (Zilliz Cloud)**: ✅ 데이터 준비 완료 (877개 인용문, 3,977개 정책)
-- **Neo4j Aura Free**: ✅ 데이터 준비 완료 (5,262개 노드, 15,257개 관계)
-- **PostgreSQL**: 로컬 실행 후 덤프 파일로 복원 필요
-
-## 데이터베이스 설정
-
-### 1. PostgreSQL 설치 및 설정
-
-#### Docker 사용 (권장)
+#### macOS (Homebrew)
 ```bash
-# docker-compose.yml 파일이 있는 경우
-docker-compose up -d
-
-# 또는 직접 실행
-docker run -d \
-  --name meari-postgres \
-  -e POSTGRES_DB=meari_db \
-  -e POSTGRES_USER=meari_user \
-  -e POSTGRES_PASSWORD=meari_password \
-  -p 5432:5432 \
-  postgres:15
-```
-
-#### 로컬 설치
-```bash
-# macOS (Homebrew)
 brew install postgresql@15
 brew services start postgresql@15
+```
 
-# Ubuntu/Debian
+#### Ubuntu/Debian
+```bash
 sudo apt update
 sudo apt install postgresql postgresql-contrib
 sudo systemctl start postgresql
 ```
 
-### 2. 데이터베이스 생성
+#### Windows
+[PostgreSQL 공식 다운로드](https://www.postgresql.org/download/windows/)
+
+### 5. 데이터베이스 생성 및 복원
 ```bash
 # PostgreSQL 접속
 psql -U postgres
 
-# 데이터베이스 및 사용자 생성
+# 데이터베이스 생성
 CREATE DATABASE meari_db;
 CREATE USER meari_user WITH PASSWORD 'meari_password';
 GRANT ALL PRIVILEGES ON DATABASE meari_db TO meari_user;
 \q
+
+# 데이터 복원 (meari_db_dump.sql 파일 필요)
+psql -U meari_user -d meari_db < meari_db_dump.sql
 ```
 
-### 3. 테이블 초기화 및 데이터 복원
-
-#### 옵션 A: 초기 데이터 복원 (권장)
-프로젝트 관리자로부터 `meari_db_dump.sql` 파일을 받은 후:
-
+### 6. 서버 실행
 ```bash
-# 1. 데이터베이스가 실행 중인지 확인
-docker ps | grep postgres
-
-# 2. 덤프 파일 복원 (테이블 생성 + 데이터 삽입)
-docker exec -i meari-backend-db-1 psql -U meari_user -d meari_db < meari_db_dump.sql
-
-# 3. 데이터 확인
-docker exec -it meari-backend-db-1 psql -U meari_user -d meari_db -c "SELECT COUNT(*) FROM news;"
-# Expected: 887 rows
-
-docker exec -it meari-backend-db-1 psql -U meari_user -d meari_db -c "SELECT COUNT(*) FROM youth_policies;"
-# Expected: 3,977 rows
-
-docker exec -it meari-backend-db-1 psql -U meari_user -d meari_db -c "SELECT COUNT(*) FROM news_quotes;"
-# Expected: 877 rows
-```
-
-#### 옵션 B: 빈 테이블만 생성
-데이터 없이 테이블만 생성하려면:
-
-```bash
-# 테이블 생성
-python -m app.db.init_db
-
-# 태그 데이터 시딩
-python -m app.db.seed_tags
-```
-
-### 4. Neo4j 설정 (Neo4j Aura Free)
-**이미 클라우드에 데이터가 준비되어 있습니다!**
-- 5,262개 노드 (News, Problem, Context, Initiative, Stakeholder, Cohort)
-- 15,257개 관계 (CAUSES, ADDRESSES, AFFECTS, INVOLVES)
-
-`.env` 파일의 Neo4j 연결 정보만 확인하면 바로 사용 가능합니다.
-
-### 5. Milvus 설정 (Zilliz Cloud)
-**이미 클라우드에 데이터가 준비되어 있습니다!**
-- 877개 인용문 벡터 (meari_quotes 컬렉션)
-- 3,977개 정책 벡터 (meari_policies 컬렉션)
-
-`.env` 파일의 Milvus 연결 정보만 확인하면 바로 사용 가능합니다.
-
-## 서버 실행
-
-### 개발 서버 실행
-```bash
-# 자동 리로드 모드로 실행 (포트 8001)
+# 개발 모드 (자동 리로드)
 uvicorn app.main:app --reload --port 8001
 
-# 또는 python 모듈로 실행
+# 또는
 python -m uvicorn app.main:app --reload --port 8001
 ```
 
-### 프로덕션 서버 실행
-```bash
-# 워커 프로세스 4개로 실행
-uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 4
+## 환경 변수 (.env)
+
+필수 환경 변수 (팀 리더에게 요청):
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://meari_user:meari_password@localhost/meari_db
+
+# API Keys
+GEMINI_API_KEY=your-gemini-api-key
+BIGKINDS_ACCESS_KEY=your-bigkinds-key
+YOUTH_POLICY_API_KEY=your-youth-policy-key
+
+# Cloud Services (이미 데이터 준비됨)
+MILVUS_URI=https://xxx.zillizcloud.com
+MILVUS_TOKEN=your-milvus-token
+NEO4J_URI=neo4j+s://xxx.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-neo4j-password
+
+# OAuth (Optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
-서버가 정상적으로 실행되면:
-- API 서버: http://localhost:8001
-- API 문서 (Swagger): http://localhost:8001/docs
-- 대체 문서 (ReDoc): http://localhost:8001/redoc
+## 클라우드 서비스 상태
+
+모든 클라우드 서비스는 이미 데이터가 준비되어 있습니다:
+- **Milvus (Zilliz Cloud)**: ✅ 877개 인용문, 3,977개 정책 벡터
+- **Neo4j (Aura Cloud)**: ✅ 5,262개 노드, 15,257개 관계
+- **PostgreSQL**: Docker 사용 시 자동 로드, 로컬은 덤프 파일 복원 필요
+
+⚠️ **중요**: Neo4j와 Milvus는 클라우드 서비스를 사용합니다. 
+- 팀원들은 `.env` 파일의 연결 정보로 자동 연결됩니다
+- 데이터 수집 스크립트(`scripts/collect_*.py`)는 실행하지 마세요 (이미 완료됨)
+- 로컬 Neo4j/Milvus 설치 불필요
 
 ## API 문서
 
-### 주요 엔드포인트
+서버 실행 후:
+- **Swagger UI**: http://localhost:8000/docs (Docker)
+- **Swagger UI**: http://localhost:8001/docs (로컬)
+- **ReDoc**: http://localhost:8000/redoc
 
-#### 인증
-- `GET /auth/login/{provider}` - 소셜 로그인 (google/kakao)
-- `GET /auth/callback/{provider}` - OAuth 콜백
-- `GET /auth/me` - 현재 사용자 정보
+### 주요 엔드포인트
 
 #### 메아리 세션
 - `POST /api/v1/meari/sessions` - 초기 세션 생성 (공감/성찰 카드)
@@ -216,92 +237,103 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 4
 - `GET /api/v1/dashboard/` - 대시보드 메인
 - `GET /api/v1/dashboard/calendar` - 월별 캘린더
 - `POST /api/v1/dashboard/rituals` - 일일 리츄얼 생성
-- `PATCH /api/v1/dashboard/rituals/{id}/complete` - 리츄얼 완료
-
-### API 테스트
-Swagger UI (http://localhost:8001/docs)에서 직접 테스트 가능합니다.
-
-## 초기 데이터 수집 (선택사항)
-
-프로젝트에 필요한 데이터를 수집하려면:
-
-```bash
-# 빅카인즈 뉴스 데이터 수집 (약 900개)
-python scripts/collect_news.py
-
-# 청년 정책 데이터 수집 (약 3,000개)
-python scripts/collect_policies.py
-
-# 인용문 추출 (뉴스에서)
-python scripts/collect_quotes.py
-
-# 벡터 DB 구축
-python scripts/create_vector_collections.py
-
-# 지식 그래프 구축 (Neo4j)
-python scripts/build_knowledge_graph.py
-```
 
 ## 트러블슈팅
 
-### 1. 데이터베이스 연결 오류
+### Docker 관련
+
+#### 포트 충돌
 ```
-sqlalchemy.exc.OperationalError: could not connect to server
+Error: bind: address already in use
 ```
-**해결**: PostgreSQL 서비스가 실행 중인지 확인
+**해결**: 
 ```bash
-# Docker
-docker ps | grep postgres
-
-# 로컬
-sudo systemctl status postgresql
+# 기존 PostgreSQL 중지
+sudo systemctl stop postgresql
+# 또는 Docker Compose 포트 변경
 ```
 
-### 2. Milvus 연결 실패
+#### 메모리 부족
 ```
-pymilvus.exceptions.ConnectionNotFoundError
+Error: Cannot allocate memory
 ```
-**해결**: Zilliz Cloud URI와 Token이 올바른지 확인
+**해결**: Docker Desktop 설정에서 메모리 할당 증가 (최소 4GB)
 
-### 3. Neo4j 연결 실패
-```
-neo4j.exceptions.ServiceUnavailable
-```
-**해결**: Neo4j가 실행 중이고 포트 7687이 열려있는지 확인
+### 로컬 설치 관련
 
-### 4. API 키 오류
+#### psql 명령어 없음
 ```
-google.generativeai.types.generation_types.BlockedPromptException
+command not found: psql
 ```
-**해결**: Gemini API 키가 유효한지 확인
+**해결**: Docker Compose 사용 또는 PostgreSQL 클라이언트 설치
 
-### 5. 모듈 import 오류
+#### Python 3.13 호환성 문제
 ```
-ModuleNotFoundError: No module named 'app'
+RuntimeError: Could not parse python long as longdouble
 ```
-**해결**: 프로젝트 루트 디렉토리에서 실행하는지 확인
+**해결**: Python 3.12 또는 3.11 사용
+
+### API 관련
+
+#### 동시 사용자 제한
+- 단일 인스턴스: 3-5명
+- Docker Compose (6 인스턴스): 30명
+- Gemini API 제한: 분당 10 요청
+
+#### 응답 시간이 느림 (30-60초)
+정상입니다. AI 처리에 시간이 필요합니다:
+- 공감 카드: Vector RAG (Milvus)
+- 성찰 카드: Graph RAG (Neo4j)
+- 페르소나 생성: LLM 처리
+
+## 개발 팁
+
+### 로그 확인
 ```bash
-cd meari-backend
-python -m uvicorn app.main:app --reload
+# Docker 로그
+docker-compose -f docker-compose-simple.yml logs -f
+
+# 로컬 실행 시 터미널에 직접 출력
 ```
 
-## 개발 팀
+### 데이터베이스 접속
+```bash
+# Docker PostgreSQL 접속
+docker exec -it meari-postgres psql -U meari_user -d meari_db
 
-- Backend Development: Meari Team
-- AI/ML Engineering: Meari Team
-- Data Engineering: Meari Team
+# 테이블 확인
+\dt
+
+# 데이터 개수 확인
+SELECT COUNT(*) FROM news;  -- 887개
+SELECT COUNT(*) FROM youth_policies;  -- 3,977개
+```
+
+### 테스트 실행
+```bash
+# 단일 사용자 테스트
+curl -X POST http://localhost:8000/api/v1/meari/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"selected_tag_id": 1}'
+
+# 동시 사용자 테스트
+./test_concurrent3.sh
+```
+
+## 지원
+
+문제 발생 시:
+1. 이 README의 트러블슈팅 섹션 확인
+2. 팀 슬랙 채널에 문의
+3. 프로젝트 리더에게 직접 연락
 
 ## 라이센스
 
 This project is proprietary and confidential.
 
-## 지원
-
-문제가 발생하면:
-1. [이슈 트래커](https://github.com/your-org/meari-backend/issues) 확인
-2. 새 이슈 생성
-3. 팀 슬랙 채널에 문의
-
 ---
 
-**Note**: 이 README는 개발 환경 설정을 위한 가이드입니다. 프로덕션 배포 시에는 추가적인 보안 설정이 필요합니다.
+**Note**: 
+- `.env` 파일과 `meari_db_dump.sql`은 절대 Git에 커밋하지 마세요!
+- 개발 시 docker-compose-simple.yml 사용 권장
+- 성능 테스트 시에만 docker-compose.yml (6 인스턴스) 사용
