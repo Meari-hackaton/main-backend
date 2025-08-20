@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional, Literal
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
-from app.services.data.milvus_connection import get_policies_collection
+from pymilvus import Collection, connections
 from sentence_transformers import SentenceTransformer
 from app.services.data.vector_store import get_policies_collection
 import os

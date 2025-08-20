@@ -43,12 +43,7 @@ async def create_meari_session(
 ) -> MeariSessionResponse:
     
     try:
-        workflow = get_workflow()
-        if not workflow:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="AI 서비스가 준비 중입니다. 잠시 후 다시 시도해주세요."
-            )
+        workflow = MeariWorkflow()
         
         workflow_request = {
             "request_type": "initial_session",
