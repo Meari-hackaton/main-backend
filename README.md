@@ -63,10 +63,27 @@ pip install -r requirements.txt
 
 ## 환경 설정
 
-### 환경 변수 파일 설정
-프로젝트 관리자로부터 `.env` 파일을 받아서 프로젝트 루트 디렉토리에 저장합니다.
+### 필요한 파일들
+프로젝트 관리자로부터 다음 파일들을 받아야 합니다:
 
-**중요**: `.env` 파일은 절대 Git에 커밋하지 마세요!
+1. **`.env`** - 환경 변수 파일 (API 키, 클라우드 DB 연결 정보)
+   - Gemini, 빅카인즈, 청년정책 API 키
+   - Milvus (Zilliz Cloud) 연결 정보
+   - Neo4j Aura Cloud 연결 정보
+   - OAuth 설정 (Google, Kakao)
+
+2. **`meari_db_dump.sql`** - PostgreSQL 초기 데이터 (6.9MB)
+   - 887개 뉴스 데이터
+   - 3,977개 청년정책 데이터  
+   - 877개 인용문 데이터
+   - 태그 및 기타 마스터 데이터
+
+**중요**: 이 파일들은 절대 Git에 커밋하지 마세요!
+
+### 클라우드 서비스 상태
+- **Milvus (Zilliz Cloud)**: ✅ 데이터 준비 완료 (877개 인용문, 3,977개 정책)
+- **Neo4j Aura Free**: ✅ 데이터 준비 완료 (5,262개 노드, 15,257개 관계)
+- **PostgreSQL**: 로컬 실행 후 덤프 파일로 복원 필요
 
 ## 데이터베이스 설정
 
@@ -111,7 +128,32 @@ GRANT ALL PRIVILEGES ON DATABASE meari_db TO meari_user;
 \q
 ```
 
-### 3. 테이블 초기화
+### 3. 테이블 초기화 및 데이터 복원
+
+#### 옵션 A: 초기 데이터 복원 (권장)
+프로젝트 관리자로부터 `meari_db_dump.sql` 파일을 받은 후:
+
+```bash
+# 1. 데이터베이스가 실행 중인지 확인
+docker ps | grep postgres
+
+# 2. 덤프 파일 복원 (테이블 생성 + 데이터 삽입)
+docker exec -i meari-backend-db-1 psql -U meari_user -d meari_db < meari_db_dump.sql
+
+# 3. 데이터 확인
+docker exec -it meari-backend-db-1 psql -U meari_user -d meari_db -c "SELECT COUNT(*) FROM news;"
+# Expected: 887 rows
+
+docker exec -it meari-backend-db-1 psql -U meari_user -d meari_db -c "SELECT COUNT(*) FROM youth_policies;"
+# Expected: 3,977 rows
+
+docker exec -it meari-backend-db-1 psql -U meari_user -d meari_db -c "SELECT COUNT(*) FROM news_quotes;"
+# Expected: 877 rows
+```
+
+#### 옵션 B: 빈 테이블만 생성
+데이터 없이 테이블만 생성하려면:
+
 ```bash
 # 테이블 생성
 python -m app.db.init_db
@@ -120,27 +162,19 @@ python -m app.db.init_db
 python -m app.db.seed_tags
 ```
 
-### 4. Neo4j 설치
+### 4. Neo4j 설정 (Neo4j Aura Free)
+**이미 클라우드에 데이터가 준비되어 있습니다!**
+- 5,262개 노드 (News, Problem, Context, Initiative, Stakeholder, Cohort)
+- 15,257개 관계 (CAUSES, ADDRESSES, AFFECTS, INVOLVES)
 
-#### Docker 사용
-```bash
-docker run -d \
-  --name neo4j \
-  -p 7474:7474 -p 7687:7687 \
-  -e NEO4J_AUTH=neo4j/your_password \
-  neo4j:latest
-```
-
-#### Neo4j Desktop 설치 (권장)
-1. [Neo4j Desktop](https://neo4j.com/download/) 다운로드
-2. 새 프로젝트 생성 > 데이터베이스 생성
-3. 데이터베이스 시작 (기본 포트: 7687)
+`.env` 파일의 Neo4j 연결 정보만 확인하면 바로 사용 가능합니다.
 
 ### 5. Milvus 설정 (Zilliz Cloud)
-1. [Zilliz Cloud](https://cloud.zilliz.com) 회원가입
-2. Free Tier 클러스터 생성
-3. Connection 정보에서 URI와 Token 복사
-4. `.env` 파일에 설정
+**이미 클라우드에 데이터가 준비되어 있습니다!**
+- 877개 인용문 벡터 (meari_quotes 컬렉션)
+- 3,977개 정책 벡터 (meari_policies 컬렉션)
+
+`.env` 파일의 Milvus 연결 정보만 확인하면 바로 사용 가능합니다.
 
 ## 서버 실행
 
