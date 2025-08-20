@@ -176,6 +176,13 @@ class MeariWorkflow:
             empathy_result = empathy_future.result()
             cypher_result = cypher_future.result()
             
+            # 디버깅: Empathy 결과 확인
+            print(f"\n=== EmpathyAgent 결과 ===")
+            print(f"empathy_card 키 존재: {'empathy_card' in empathy_result}")
+            if 'empathy_card' in empathy_result:
+                print(f"empathy_card content: {empathy_result['empathy_card'].get('content', '')[:100]}...")
+                print(f"empathy_card cards 개수: {len(empathy_result['empathy_card'].get('cards', []))}")
+            
             # 상태 병합 - 각 에이전트의 모든 업데이트를 병합
             # Empathy 에이전트의 업데이트 병합
             for key, value in empathy_result.items():

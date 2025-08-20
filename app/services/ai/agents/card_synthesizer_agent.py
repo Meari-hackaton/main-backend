@@ -9,6 +9,13 @@ class CardSynthesizerAgent:
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """상태를 구조화된 카드 형태로 변환"""
         
+        # 디버깅: 받은 상태 확인
+        print(f"\n=== CardSynthesizer: 전체 상태 확인 ===")
+        print(f"empathy_card 키 존재: {'empathy_card' in state}")
+        if 'empathy_card' in state:
+            print(f"empathy_card 내용: {state['empathy_card'].get('content', '')[:50]}...")
+            print(f"empathy_card cards: {len(state['empathy_card'].get('cards', []))}")
+        
         routing_type = state.get("routing", {}).get("type", "")
         
         if routing_type == "initial_session":
@@ -138,6 +145,13 @@ class CardSynthesizerAgent:
     
     def _structure_empathy_card(self, raw_data: Dict) -> Dict[str, Any]:
         """공감 카드 구조화"""
+        # 디버깅: 받은 데이터 확인
+        print(f"\n=== CardSynthesizer: empathy_card 받음 ===")
+        print(f"raw_data 키: {list(raw_data.keys())}")
+        print(f"cards 개수: {len(raw_data.get('cards', []))}")
+        if raw_data.get('cards'):
+            print(f"첫 번째 카드: {raw_data['cards'][0].get('title', 'N/A')}")
+        
         # EmpathyAgent에서 개선된 구조로 cards 배열이 있는지 확인
         cards = raw_data.get("cards", [])
         

@@ -71,7 +71,7 @@ class EmpathyAgent:
         """공감 카드 생성 프롬프트"""
         
         system_message = """당신은 청년들의 마음을 깊이 이해하는 공감 상담사입니다.
-제공된 인용문들을 각각 독립적인 공감 카드로 작성하세요.
+제공된 인용문들을 바탕으로 3개의 공감 카드를 작성하세요.
 
 ## 작성 원칙:
 1. 각 인용문마다 하나의 카드로 작성 (200-300자)
@@ -80,30 +80,10 @@ class EmpathyAgent:
 4. 비판이나 조언 없이 순수한 공감과 위로만 전달
 5. 희망적이지만 현실적인 톤 유지
 
-## 카드 유형:
-1. "같은 마음이 느껴져요" - 유사한 경험에 대한 공감
-2. "왜 그렇게 느껴지는지 알 것 같아요" - 감정의 원인 이해
-3. "당신만이 그런 것은 아니에요" - 보편적 경험 공유
-
 ## 응답 형식:
-반드시 다음과 같은 JSON 배열 형식으로만 응답하세요:
-[
-  {{
-    "title": "카드 제목",
-    "content": "카드 내용 (200-300자)",
-    "emotion_keywords": ["감정 키워드1", "감정 키워드2", "감정 키워드3"]
-  }},
-  {{
-    "title": "카드 제목",
-    "content": "카드 내용 (200-300자)",
-    "emotion_keywords": ["감정 키워드1", "감정 키워드2", "감정 키워드3"]
-  }},
-  {{
-    "title": "카드 제목",
-    "content": "카드 내용 (200-300자)",
-    "emotion_keywords": ["감정 키워드1", "감정 키워드2", "감정 키워드3"]
-  }}
-]"""
+JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나 추가 텍스트를 포함하지 마세요.
+
+[{{"title": "같은 마음이 느껴져요", "content": "카드 내용", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}, {{"title": "왜 그렇게 느껴지는지 알 것 같아요", "content": "카드 내용", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}, {{"title": "당신만이 그런 것은 아니에요", "content": "카드 내용", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}]"""
         
         human_template = """다음 3개의 인용문로 각각 다른 공감 카드를 작성하세요:
 
@@ -212,17 +192,34 @@ class EmpathyAgent:
             
             # 응답 파싱
             import json
+            import re
+            
             content = response.content.strip()
-            if content.startswith('[') and content.endswith(']'):
-                cards_data = json.loads(content)
-            else:
-                # JSON 배열 부분만 추출 시도
-                start_idx = content.find('[')
-                end_idx = content.rfind(']') + 1
-                if start_idx != -1 and end_idx > start_idx:
-                    cards_data = json.loads(content[start_idx:end_idx])
+            
+            # 코드 블록 제거 (```json ... ``` 형태)
+            content = re.sub(r'```json?\s*', '', content)
+            content = re.sub(r'```\s*$', '', content)
+            
+            # 앞뒤 공백 제거
+            content = content.strip()
+            
+            # JSON 파싱 시도
+            try:
+                if content.startswith('[') and content.endswith(']'):
+                    cards_data = json.loads(content)
                 else:
-                    raise ValueError("JSON 배열을 찾을 수 없음")
+                    # JSON 배열 부분만 추출 시도
+                    start_idx = content.find('[')
+                    end_idx = content.rfind(']') + 1
+                    if start_idx != -1 and end_idx > start_idx:
+                        json_str = content[start_idx:end_idx]
+                        cards_data = json.loads(json_str)
+                    else:
+                        raise ValueError("JSON 배열을 찾을 수 없음")
+            except json.JSONDecodeError as e:
+                print(f"JSON 파싱 실패: {e}")
+                print(f"원본 응답: {content[:500]}...")
+                raise ValueError(f"JSON 파싱 실패: {e}")
             
             # 뉴스 정보 조회
             news_ids = [q.get('news_id') for q in top_quotes if q.get('news_id')]
@@ -259,10 +256,16 @@ class EmpathyAgent:
             
         except Exception as e:
             print(f"카드 생성 실패: {e}")
-            return self._generate_default_cards(top_quotes)
+            # 뉴스 정보를 먼저 조회
+            news_ids = [q.get('news_id') for q in top_quotes if q.get('news_id')]
+            news_info = self._get_news_info_sync(news_ids)
+            return self._generate_default_cards(top_quotes, news_info)
     
-    def _generate_default_cards(self, quotes: List[Dict[str, Any]]) -> List[QuoteCard]:
+    def _generate_default_cards(self, quotes: List[Dict[str, Any]], news_info: Dict[str, Dict] = None) -> List[QuoteCard]:
         """기본 공감 카드 생성"""
+        if news_info is None:
+            news_info = {}
+            
         cards = []
         default_messages = [
             "비슷한 상황에 있는 많은 사람들이 이런 이야기를 하고 있어요. 당신의 마음이 충분히 이해됩니다.",
@@ -277,16 +280,19 @@ class EmpathyAgent:
         
         for i in range(3):
             quote = quotes[i] if i < len(quotes) else {"text": "", "news_id": None}
+            news_id = quote.get('news_id')
+            ninfo = news_info.get(news_id, {}) if news_id else {}
+            
             card = QuoteCard(
                 title=card_titles[i],
                 content=default_messages[i],
                 quote_text=quote.get('text', ''),
                 speaker=quote.get('speaker'),
-                news_id=quote.get('news_id'),
-                news_title=None,
-                news_provider=None,
-                news_date=None,
-                news_link=None,
+                news_id=news_id,
+                news_title=ninfo.get("title"),
+                news_provider=ninfo.get("provider"),
+                news_date=ninfo.get("published_at"),
+                news_link=ninfo.get("link_url"),
                 emotion_keywords=["공감", "위로", "이해"]
             )
             cards.append(card)
