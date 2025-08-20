@@ -58,7 +58,7 @@ class UserStreak(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # 관계
-    user = relationship("User", back_populates="streak", uselist=False)
+    user = relationship("User", back_populates="user_streak", uselist=False)
 
 
 class RitualTemplate(Base):

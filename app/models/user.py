@@ -23,6 +23,8 @@ class User(Base):
     content_histories = relationship("UserContentHistory", back_populates="user", cascade="all, delete-orphan")
     heart_tree = relationship("HeartTree", back_populates="user", uselist=False, cascade="all, delete-orphan")
     persona_histories = relationship("AIPersonaHistory", back_populates="user", cascade="all, delete-orphan")
+    daily_rituals = relationship("DailyRitual", back_populates="user", cascade="all, delete-orphan")
+    user_streak = relationship("UserStreak", back_populates="user", uselist=False, cascade="all, delete-orphan")
     
     # 복합 유니크 제약조건
     __table_args__ = (

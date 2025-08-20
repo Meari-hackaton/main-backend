@@ -21,7 +21,7 @@ from app.schemas.meari import (
 )
 from app.models.card import MeariSession, GeneratedCard
 from app.models.checkin import AIPersonaHistory, Ritual, HeartTree
-from app.services.ai.workflow import MeariWorkflow
+from app.core.workflow_manager import get_workflow
 
 router = APIRouter(
     prefix="/meari",
@@ -43,7 +43,12 @@ async def create_meari_session(
 ) -> MeariSessionResponse:
     
     try:
-        workflow = MeariWorkflow()
+        workflow = get_workflow()
+        if not workflow:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI 서비스가 준비 중입니다. 잠시 후 다시 시도해주세요."
+            )
         
         workflow_request = {
             "request_type": "initial_session",
@@ -52,8 +57,15 @@ async def create_meari_session(
             "user_context": request.user_context or f"태그 {request.selected_tag_id}번 관련 고민"
         }
         
-        workflow_result = workflow.process_request(workflow_request)
-        workflow.close()
+        # 동기 함수를 비동기로 실행
+        import asyncio
+        loop = asyncio.get_event_loop()
+        workflow_result = await loop.run_in_executor(
+            None,  # 기본 ThreadPoolExecutor 사용
+            workflow.process_request,
+            workflow_request
+        )
+        # workflow.close() 제거 - 전역 인스턴스는 닫지 않음
         
         # 디버깅: 결과 확인
         print(f"워크플로우 결과 키: {list(workflow_result.keys())}")
@@ -198,7 +210,14 @@ async def create_growth_contents(
             "user_id": str(user_id) if user_id else None
         }
         
-        workflow_result = workflow.process_request(workflow_request)
+        # 동기 함수를 비동기로 실행
+        import asyncio
+        loop = asyncio.get_event_loop()
+        workflow_result = await loop.run_in_executor(
+            None,  # 기본 ThreadPoolExecutor 사용
+            workflow.process_request,
+            workflow_request
+        )
         workflow.close()
         
         # 카드 저장

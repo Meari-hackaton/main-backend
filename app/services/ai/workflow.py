@@ -11,6 +11,8 @@ from app.services.ai.agents.reflection_agent import ReflectionAgent
 from app.services.ai.agents.growth_agent import GrowthAgent
 from app.services.ai.agents.persona_agent import PersonaAgent
 from app.services.ai.agents.card_synthesizer_agent import CardSynthesizerAgent
+from app.services.ai.config import AIConfig
+import os
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
@@ -64,10 +66,18 @@ class MeariWorkflow:
     """메아리 LangGraph 워크플로우"""
     
     def __init__(self):
-        # 에이전트 초기화
+        # API 키 로드밸런싱을 위한 설정
+        api_keys = [
+            os.getenv("GEMINI_API_KEY"),
+            os.getenv("GEMINI_API_KEY2"),
+            os.getenv("GEMINI_API_KEY3")
+        ]
+        valid_keys = [k for k in api_keys if k]
+        
+        # 각 에이전트에 다른 API 키 할당
         self.supervisor = SupervisorAgent()
         self.cypher = CypherAgent()
-        self.empathy = EmpathyAgent()
+        self.empathy = EmpathyAgent(api_key=valid_keys[0] if len(valid_keys) > 0 else None)
         self.reflection = ReflectionAgent()
         self.growth = GrowthAgent()
         self.persona = PersonaAgent()

@@ -9,8 +9,16 @@ class AIConfig(BaseModel):
     """AI 서비스 설정"""
     
     # Gemini API 설정
+    gemini_api_keys: list = Field(default_factory=lambda: [
+        k for k in [
+            os.getenv("GEMINI_API_KEY", ""),
+            os.getenv("GEMINI_API_KEY2", ""),
+            os.getenv("GEMINI_API_KEY3", "")
+        ] if k
+    ])
     gemini_api_key: str = Field(default_factory=lambda: os.getenv("GEMINI_API_KEY", ""))
     gemini_model: str = "gemini-2.5-flash-lite"
+    _key_index: int = 0
     
     # 모델 파라미터
     temperature: float = 0.7
@@ -32,9 +40,18 @@ class AIConfig(BaseModel):
     
     def validate_keys(self) -> bool:
         """API 키 유효성 검증"""
-        if not self.gemini_api_key:
+        if not self.gemini_api_keys:
             raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
         return True
+    
+    def get_next_api_key(self) -> str:
+        """라운드 로빈 방식으로 다음 API 키 반환"""
+        if not self.gemini_api_keys:
+            return self.gemini_api_key
+        
+        key = self.gemini_api_keys[self._key_index % len(self.gemini_api_keys)]
+        self._key_index += 1
+        return key
     
     class Config:
         validate_assignment = True

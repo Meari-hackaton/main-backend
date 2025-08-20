@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
-from pymilvus import Collection, connections
+from app.services.data.milvus_connection import get_quotes_collection
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -32,15 +32,19 @@ class EmpathyCards(BaseModel):
 class EmpathyAgent:
     """Vector RAG 기반 공감 카드 생성 에이전트"""
     
-    def __init__(self):
+    def __init__(self, api_key=None):
+        # API 키가 제공되지 않으면 기본값 사용
+        if not api_key:
+            api_key = os.getenv("GEMINI_API_KEY")
+        
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash-lite",
             temperature=0.7,  # 공감적 응답을 위해 높은 temperature
-            google_api_key=os.getenv("GEMINI_API_KEY")
+            google_api_key=api_key
         )
         
-        # Milvus 연결
-        self._connect_milvus()
+        # Milvus 컬렉션은 사용 시점에 가져오기
+        self.quotes_collection = None
         
         # 임베딩 모델 로드
         self.embedding_model = SentenceTransformer('nlpai-lab/KURE-v1')
@@ -56,17 +60,11 @@ class EmpathyAgent:
         self.engine = create_engine(database_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
     
-    def _connect_milvus(self):
-        """Milvus 연결"""
-        connections.connect(
-            alias="default",
-            uri=os.getenv("MILVUS_URI"),
-            token=os.getenv("MILVUS_TOKEN")
-        )
-        
-        # 인용문 컬렉션 로드
-        self.quotes_collection = Collection("meari_quotes")
-        self.quotes_collection.load()
+    def _get_collection(self):
+        """Milvus 컬렉션 가져오기 (lazy loading)"""
+        if self.quotes_collection is None:
+            self.quotes_collection = get_quotes_collection()
+        return self.quotes_collection
     
     def _create_prompt(self) -> ChatPromptTemplate:
         """공감 카드 생성 프롬프트"""
@@ -140,7 +138,8 @@ class EmpathyAgent:
             expr = None
         
         # 벡터 검색
-        results = self.quotes_collection.search(
+        collection = self._get_collection()
+        results = collection.search(
             data=[user_embedding.tolist()],
             anns_field="embedding",
             param=search_params,

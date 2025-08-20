@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional, Literal
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
-from pymilvus import Collection, connections
+from app.services.data.milvus_connection import get_policies_collection
 from sentence_transformers import SentenceTransformer
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -25,8 +25,8 @@ class GrowthAgent:
             google_api_key=os.getenv("GEMINI_API_KEY")
         )
         
-        # Milvus 연결 (정책 검색용)
-        self._connect_milvus()
+        # Milvus 커렉션은 사용 시점에 가져오기
+        self.policies_collection = None
         
         # 임베딩 모델
         self.embedding_model = SentenceTransformer('nlpai-lab/KURE-v1')
@@ -35,15 +35,11 @@ class GrowthAgent:
         self.info_prompt = self._create_info_prompt()
         self.exp_prompt = self._create_exp_prompt()
     
-    def _connect_milvus(self):
-        """Milvus 연결"""
-        connections.connect(
-            alias="default",
-            uri=os.getenv("MILVUS_URI"),
-            token=os.getenv("MILVUS_TOKEN")
-        )
-        self.policies_collection = Collection("meari_policies")
-        self.policies_collection.load()
+    def _get_collection(self):
+        """Milvus 커렉션 가져오기 (lazy loading)"""
+        if self.policies_collection is None:
+            self.policies_collection = get_policies_collection()
+        return self.policies_collection
     
     def _create_info_prompt(self) -> ChatPromptTemplate:
         """정보 검색 쿼리 생성 프롬프트"""
@@ -97,7 +93,8 @@ class GrowthAgent:
         # 중복 제외
         expr = f"policy_id not in {previous_policy_ids}" if previous_policy_ids else None
         
-        results = self.policies_collection.search(
+        collection = self._get_collection()
+        results = collection.search(
             data=[query_embedding.tolist()],
             anns_field="embedding",
             param=search_params,
