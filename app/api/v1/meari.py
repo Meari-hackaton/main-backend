@@ -12,10 +12,13 @@ from app.schemas.meari import (
     MeariSessionRequest,
     MeariSessionResponse,
     GrowthContentRequest,
-    GrowthContentResponse
+    GrowthContentResponse,
+    RitualRequest,
+    RitualResponse,
+    TreeStatus
 )
 from app.models.card import MeariSession, GeneratedCard
-from app.models.checkin import AIPersonaHistory
+from app.models.checkin import AIPersonaHistory, Ritual, HeartTree
 from app.services.ai.workflow import MeariWorkflow
 
 router = APIRouter(
@@ -252,3 +255,210 @@ async def create_growth_contents(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"성장 콘텐츠 생성 중 오류 발생: {str(e)}"
         )
+
+
+@router.post(
+    "/rituals",
+    response_model=RitualResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="리츄얼 기록",
+    description="사용자의 일기와 기분을 기록하고 페르소나를 업데이트합니다"
+)
+async def create_ritual(
+    request: RitualRequest,
+    db: Session = Depends(get_db)
+) -> RitualResponse:
+    
+    try:
+        # 사용자 ID 확인 또는 생성
+        user_id = request.user_id
+        if not user_id:
+            # 테스트용 사용자 생성
+            from app.models.user import User
+            test_user = User(
+                email=f"ritual_{uuid.uuid4().hex[:8]}@meari.com",
+                full_name="리츄얼 사용자",
+                is_active=True
+            )
+            db.add(test_user)
+            await db.flush()
+            user_id = test_user.id
+        
+        # 기존 리츄얼 개수 확인
+        from sqlalchemy import select, func
+        stmt = select(func.count()).select_from(Ritual).where(Ritual.user_id == user_id)
+        result = await db.execute(stmt)
+        ritual_count = result.scalar() or 0
+        
+        # 새 리츄얼 시퀀스
+        new_sequence = ritual_count + 1
+        
+        # 리츄얼 저장
+        ritual = Ritual(
+            user_id=user_id,
+            ritual_sequence=new_sequence,
+            diary_entry=request.diary_entry,
+            selected_mood=request.selected_mood,
+            ritual_completed=True,
+            checkin_date=datetime.utcnow().date()
+        )
+        db.add(ritual)
+        await db.flush()
+        
+        # 마음나무 상태 업데이트 또는 생성
+        stmt = select(HeartTree).where(HeartTree.user_id == user_id)
+        result = await db.execute(stmt)
+        heart_tree = result.scalar_one_or_none()
+        
+        if not heart_tree:
+            heart_tree = HeartTree(
+                user_id=user_id,
+                growth_level=new_sequence,
+                last_grew_at=datetime.utcnow()
+            )
+            db.add(heart_tree)
+        else:
+            heart_tree.growth_level = new_sequence
+            heart_tree.last_grew_at = datetime.utcnow()
+        
+        # 마음나무 단계 계산
+        tree_status = _calculate_tree_status(new_sequence)
+        
+        # 페르소나 업데이트 (5개 리츄얼마다)
+        persona_updated = False
+        persona_data = {}
+        
+        if new_sequence % 5 == 0:  # 5, 10, 15, 20, 25개째
+            # 이전 리츄얼 데이터 가져오기
+            stmt = select(Ritual).where(
+                Ritual.user_id == user_id
+            ).order_by(Ritual.ritual_sequence.desc()).limit(5)
+            result = await db.execute(stmt)
+            recent_rituals = result.scalars().all()
+            
+            # 워크플로우 실행
+            workflow = MeariWorkflow()
+            
+            workflow_request = {
+                "request_type": "ritual",
+                "endpoint": "/api/rituals",
+                "diary_entry": request.diary_entry,
+                "selected_mood": request.selected_mood,
+                "previous_rituals": [
+                    {
+                        "sequence": r.ritual_sequence,
+                        "diary": r.diary_entry,
+                        "mood": r.selected_mood
+                    }
+                    for r in recent_rituals
+                ],
+                "user_id": str(user_id)
+            }
+            
+            workflow_result = workflow.process_request(workflow_request)
+            workflow.close()
+            
+            # 페르소나 업데이트
+            persona_data = workflow_result.get("persona", {})
+            if persona_data:
+                # 기존 페르소나를 is_latest=False로
+                from sqlalchemy import update
+                stmt = update(AIPersonaHistory).where(
+                    AIPersonaHistory.user_id == user_id,
+                    AIPersonaHistory.is_latest == True
+                ).values(is_latest=False)
+                await db.execute(stmt)
+                
+                # 새 페르소나 저장
+                persona_history = AIPersonaHistory(
+                    user_id=user_id,
+                    persona_data=persona_data,
+                    event_type="ritual_update",
+                    is_latest=True,
+                    event_date=datetime.utcnow().date()
+                )
+                db.add(persona_history)
+                persona_updated = True
+        
+        # 28일 완주 처리
+        completion_message = None
+        if new_sequence == 28:
+            completion_message = "축하합니다! 28일의 여정을 완주하셨습니다! 당신의 성장 일기가 생성되었습니다."
+        
+        await db.commit()
+        
+        return RitualResponse(
+            status="success",
+            action="ritual_recorded",
+            timestamp=datetime.utcnow(),
+            ritual_id=ritual.id,
+            persona={
+                "updated": persona_updated,
+                "depth": persona_data.get("depth", "surface"),
+                "summary": persona_data.get("summary", "")
+            },
+            tree=tree_status,
+            message=completion_message or _get_encouragement_message(new_sequence)
+        )
+        
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"리츄얼 기록 중 오류 발생: {str(e)}"
+        )
+
+
+def _calculate_tree_status(ritual_count: int) -> TreeStatus:
+    """마음나무 상태 계산"""
+    
+    if ritual_count <= 6:
+        stage = "seed"
+        stage_label = "씨앗"
+        next_milestone = 7
+    elif ritual_count <= 13:
+        stage = "sprouting"
+        stage_label = "새싹"
+        next_milestone = 14
+    elif ritual_count <= 20:
+        stage = "growing"
+        stage_label = "성장"
+        next_milestone = 21
+    elif ritual_count <= 27:
+        stage = "blooming"
+        stage_label = "개화"
+        next_milestone = 28
+    else:
+        stage = "full_bloom"
+        stage_label = "만개"
+        next_milestone = None
+    
+    percentage = min(ritual_count / 28 * 100, 100)
+    
+    return TreeStatus(
+        stage=stage,
+        stage_label=stage_label,
+        progress=ritual_count,
+        next_milestone=next_milestone,
+        percentage=percentage
+    )
+
+
+def _get_encouragement_message(ritual_count: int) -> str:
+    """격려 메시지 생성"""
+    
+    milestones = {
+        1: "첫 걸음을 내디뎠네요! 앞으로의 여정이 기대됩니다.",
+        7: "일주일째 함께하고 있어요. 마음나무가 새싹을 틔웠어요!",
+        14: "2주간의 여정, 대단해요! 마음나무가 무럭무럭 자라고 있어요.",
+        21: "3주차, 거의 다 왔어요! 마음나무에 꽃봉오리가 맺혔어요.",
+        28: "완주 축하합니다! 마음나무가 아름답게 만개했어요!"
+    }
+    
+    if ritual_count in milestones:
+        return milestones[ritual_count]
+    else:
+        return f"{ritual_count}일째 성장 중! 오늘도 한 걸음 더 나아갔어요."
