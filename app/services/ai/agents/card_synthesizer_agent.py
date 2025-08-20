@@ -108,7 +108,8 @@ class CardSynthesizerAgent:
                 "information": info_card,
                 "experience": exp_card,
                 "support": support_card
-            }
+            },
+            "cards_for_db": state["cards_for_db"]  # DB 저장용 카드 포함
         }
         
         return state
