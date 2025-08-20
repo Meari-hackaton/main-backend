@@ -10,12 +10,16 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 from dotenv import load_dotenv
 import logging
+import threading
 
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+# 스레드 로컬 스토리지
+thread_local = threading.local()
 
 
 class VectorStore:
@@ -345,46 +349,54 @@ class VectorStore:
 
 
 def get_quotes_collection() -> Collection:
-    """인용문 컬렉션 가져오기 (싱글톤)"""
+    """인용문 컬렉션 가져오기 (스레드 세이프)"""
     try:
-        # 연결 확인
-        if not connections.has_connection("default"):
-            uri = os.getenv("MILVUS_URI")
-            token = os.getenv("MILVUS_TOKEN")
-            connections.connect(
-                alias="default",
-                uri=uri,
-                token=token,
-                secure=True
-            )
+        # 스레드별로 독립적인 컬렉션 객체 유지
+        if not hasattr(thread_local, 'quotes_collection'):
+            # 연결 확인
+            if not connections.has_connection("default"):
+                uri = os.getenv("MILVUS_URI")
+                token = os.getenv("MILVUS_TOKEN")
+                connections.connect(
+                    alias="default",
+                    uri=uri,
+                    token=token,
+                    secure=True
+                )
+            
+            # 컬렉션 로드 (스레드당 한 번만)
+            thread_local.quotes_collection = Collection("meari_quotes")
+            thread_local.quotes_collection.load()
+            logger.info(f"Thread {threading.current_thread().name}: 인용문 컬렉션 로드")
         
-        # 컬렉션 로드
-        collection = Collection("meari_quotes")
-        collection.load()
-        return collection
+        return thread_local.quotes_collection
     except Exception as e:
         logger.error(f"인용문 컬렉션 가져오기 실패: {e}")
         raise
 
 
 def get_policies_collection() -> Collection:
-    """정책 컬렉션 가져오기 (싱글톤)"""
+    """정책 컬렉션 가져오기 (스레드 세이프)"""
     try:
-        # 연결 확인
-        if not connections.has_connection("default"):
-            uri = os.getenv("MILVUS_URI")
-            token = os.getenv("MILVUS_TOKEN")
-            connections.connect(
-                alias="default",
-                uri=uri,
-                token=token,
-                secure=True
-            )
+        # 스레드별로 독립적인 컬렉션 객체 유지
+        if not hasattr(thread_local, 'policies_collection'):
+            # 연결 확인
+            if not connections.has_connection("default"):
+                uri = os.getenv("MILVUS_URI")
+                token = os.getenv("MILVUS_TOKEN")
+                connections.connect(
+                    alias="default",
+                    uri=uri,
+                    token=token,
+                    secure=True
+                )
+            
+            # 컬렉션 로드 (스레드당 한 번만)
+            thread_local.policies_collection = Collection("meari_policies")
+            thread_local.policies_collection.load()
+            logger.info(f"Thread {threading.current_thread().name}: 정책 컬렉션 로드")
         
-        # 컬렉션 로드
-        collection = Collection("meari_policies")
-        collection.load()
-        return collection
+        return thread_local.policies_collection
     except Exception as e:
         logger.error(f"정책 컬렉션 가져오기 실패: {e}")
         raise
@@ -441,46 +453,54 @@ def get_policies_collection() -> Collection:
 
 
 def get_quotes_collection() -> Collection:
-    """인용문 컬렉션 가져오기 (싱글톤)"""
+    """인용문 컬렉션 가져오기 (스레드 세이프)"""
     try:
-        # 연결 확인
-        if not connections.has_connection("default"):
-            uri = os.getenv("MILVUS_URI")
-            token = os.getenv("MILVUS_TOKEN")
-            connections.connect(
-                alias="default",
-                uri=uri,
-                token=token,
-                secure=True
-            )
+        # 스레드별로 독립적인 컬렉션 객체 유지
+        if not hasattr(thread_local, 'quotes_collection'):
+            # 연결 확인
+            if not connections.has_connection("default"):
+                uri = os.getenv("MILVUS_URI")
+                token = os.getenv("MILVUS_TOKEN")
+                connections.connect(
+                    alias="default",
+                    uri=uri,
+                    token=token,
+                    secure=True
+                )
+            
+            # 컬렉션 로드 (스레드당 한 번만)
+            thread_local.quotes_collection = Collection("meari_quotes")
+            thread_local.quotes_collection.load()
+            logger.info(f"Thread {threading.current_thread().name}: 인용문 컬렉션 로드")
         
-        # 컬렉션 로드
-        collection = Collection("meari_quotes")
-        collection.load()
-        return collection
+        return thread_local.quotes_collection
     except Exception as e:
         logger.error(f"인용문 컬렉션 가져오기 실패: {e}")
         raise
 
 
 def get_policies_collection() -> Collection:
-    """정책 컬렉션 가져오기 (싱글톤)"""
+    """정책 컬렉션 가져오기 (스레드 세이프)"""
     try:
-        # 연결 확인
-        if not connections.has_connection("default"):
-            uri = os.getenv("MILVUS_URI")
-            token = os.getenv("MILVUS_TOKEN")
-            connections.connect(
-                alias="default",
-                uri=uri,
-                token=token,
-                secure=True
-            )
+        # 스레드별로 독립적인 컬렉션 객체 유지
+        if not hasattr(thread_local, 'policies_collection'):
+            # 연결 확인
+            if not connections.has_connection("default"):
+                uri = os.getenv("MILVUS_URI")
+                token = os.getenv("MILVUS_TOKEN")
+                connections.connect(
+                    alias="default",
+                    uri=uri,
+                    token=token,
+                    secure=True
+                )
+            
+            # 컬렉션 로드 (스레드당 한 번만)
+            thread_local.policies_collection = Collection("meari_policies")
+            thread_local.policies_collection.load()
+            logger.info(f"Thread {threading.current_thread().name}: 정책 컬렉션 로드")
         
-        # 컬렉션 로드
-        collection = Collection("meari_policies")
-        collection.load()
-        return collection
+        return thread_local.policies_collection
     except Exception as e:
         logger.error(f"정책 컬렉션 가져오기 실패: {e}")
         raise
