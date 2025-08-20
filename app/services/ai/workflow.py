@@ -23,6 +23,8 @@ class MeariState(TypedDict):
     endpoint: str
     user_context: str
     tag_ids: List[int]
+    context_type: str  # growth_content용 (initial/ritual)
+    persona_summary: str  # growth_content용
     previous_policy_ids: List[str]
     previous_rituals: List[str]
     diary_entry: str
@@ -193,10 +195,12 @@ class MeariWorkflow:
         
         # 초기 상태 생성
         initial_state = MeariState(
-            request_type=request_data.get("type", "initial_session"),
+            request_type=request_data.get("request_type", "initial_session"),
             endpoint=request_data.get("endpoint", ""),
             user_context=request_data.get("user_context", ""),
             tag_ids=request_data.get("tag_ids", []),
+            context_type=request_data.get("context", "initial"),  # growth_content용
+            persona_summary=request_data.get("persona_summary", ""),  # growth_content용
             previous_policy_ids=request_data.get("previous_policy_ids", []),
             previous_rituals=request_data.get("previous_rituals", []),
             diary_entry=request_data.get("diary_entry", ""),

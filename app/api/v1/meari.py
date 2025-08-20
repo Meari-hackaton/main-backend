@@ -3,11 +3,13 @@
 """
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import uuid
 
 from app.core.database import get_db
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.schemas.meari import (
     MeariSessionRequest,
     MeariSessionResponse,
@@ -36,7 +38,8 @@ router = APIRouter(
 )
 async def create_meari_session(
     request: MeariSessionRequest,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ) -> MeariSessionResponse:
     
     try:
@@ -64,34 +67,7 @@ async def create_meari_session(
             )
         
         session_id = uuid.uuid4()
-        
-        # user_id 처리
-        if request.user_id:
-            user_id = request.user_id
-        else:
-            # 테스트용 기본 사용자 생성 또는 조회
-            from app.models.user import User
-            from sqlalchemy import select
-            
-            # 테스트 사용자 조회
-            result = await db.execute(
-                select(User).where(User.email == "test@meari.com")
-            )
-            test_user = result.scalar_one_or_none()
-            
-            if not test_user:
-                # 테스트 사용자 생성 (소셜 로그인 기반 User 모델)
-                test_user = User(
-                    id=uuid.uuid4(),
-                    social_provider="test",
-                    social_id="test_user_001",
-                    email="test@meari.com",
-                    nickname="테스트 사용자"
-                )
-                db.add(test_user)
-                await db.flush()  # ID 즉시 사용 가능하도록
-            
-            user_id = test_user.id
+        user_id = current_user.id  # 인증된 사용자의 ID 사용
         
         session = MeariSession(
             id=session_id,
@@ -165,13 +141,14 @@ async def create_meari_session(
 )
 async def create_growth_contents(
     request: GrowthContentRequest,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ) -> GrowthContentResponse:
     
     try:
         # 세션 확인
         from sqlalchemy import select
-        stmt = select(MeariSession).where(MeariSession.session_id == request.session_id)
+        stmt = select(MeariSession).where(MeariSession.id == request.session_id)
         result = await db.execute(stmt)
         session = result.scalar_one_or_none()
         
@@ -181,19 +158,8 @@ async def create_growth_contents(
                 detail="세션을 찾을 수 없습니다"
             )
         
-        # 사용자 ID 확인 또는 생성
-        user_id = request.user_id or session.user_id
-        if not user_id:
-            # 테스트용 사용자 생성
-            from app.models.user import User
-            test_user = User(
-                email=f"test_{uuid.uuid4().hex[:8]}@meari.com",
-                full_name="테스트 사용자",
-                is_active=True
-            )
-            db.add(test_user)
-            await db.flush()
-            user_id = test_user.id
+        # 인증된 사용자 ID 사용
+        user_id = current_user.id
         
         # 최신 페르소나 가져오기
         persona_summary = request.persona_summary
@@ -207,6 +173,18 @@ async def create_growth_contents(
             if persona:
                 persona_summary = persona.persona_data.get("summary", "")
         
+        # 사용자가 이미 본 정책 ID 가져오기
+        from app.models.history import UserContentHistory
+        stmt = select(UserContentHistory.content_id).where(
+            UserContentHistory.user_id == user_id,
+            UserContentHistory.content_type == "policy"
+        )
+        result = await db.execute(stmt)
+        viewed_policy_ids = [row[0] for row in result.fetchall()]
+        
+        # 요청에서 제공된 previous_policy_ids와 병합
+        all_previous_policy_ids = list(set(request.previous_policy_ids + viewed_policy_ids))
+        
         # 워크플로우 실행
         workflow = MeariWorkflow()
         
@@ -216,7 +194,7 @@ async def create_growth_contents(
             "context": request.context,
             "session_id": str(request.session_id),
             "persona_summary": persona_summary,
-            "previous_policy_ids": request.previous_policy_ids,
+            "previous_policy_ids": all_previous_policy_ids,  # 병합된 리스트 사용
             "user_id": str(user_id) if user_id else None
         }
         
@@ -236,6 +214,19 @@ async def create_growth_contents(
                 growth_context=card_data.get("growth_context", request.context)
             )
             db.add(card)
+            
+            # support 카드에서 정책 ID 추출하여 이력 저장
+            if card_data.get("sub_type") == "support" and card_data.get("source_ids"):
+                policy_ids = card_data["source_ids"].get("policies", [])
+                for policy_id in policy_ids:
+                    if policy_id:
+                        # 중복 체크 후 저장 (UniqueConstraint가 있으므로 try-except 처리)
+                        history = UserContentHistory(
+                            user_id=user_id,
+                            content_type="policy",
+                            content_id=policy_id
+                        )
+                        db.add(history)
         
         await db.commit()
         
@@ -266,23 +257,13 @@ async def create_growth_contents(
 )
 async def create_ritual(
     request: RitualRequest,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ) -> RitualResponse:
     
     try:
-        # 사용자 ID 확인 또는 생성
-        user_id = request.user_id
-        if not user_id:
-            # 테스트용 사용자 생성
-            from app.models.user import User
-            test_user = User(
-                email=f"ritual_{uuid.uuid4().hex[:8]}@meari.com",
-                full_name="리츄얼 사용자",
-                is_active=True
-            )
-            db.add(test_user)
-            await db.flush()
-            user_id = test_user.id
+        # 인증된 사용자 ID 사용
+        user_id = current_user.id
         
         # 기존 리츄얼 개수 확인
         from sqlalchemy import select, func

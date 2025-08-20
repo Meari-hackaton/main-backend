@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, Response
+from fastapi import FastAPI, Depends, HTTPException, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.auth import get_current_user, get_optional_user
 from app.api.v1.api import api_router
 from app.models.user import User, UserSession
 
@@ -160,15 +161,60 @@ async def google_callback(
         path="/"
     )
 
-    # 6) 리다이렉트 또는 성공 응답
-    return JSONResponse({
-        "message": "Login successful",
-        "user": {
-            "id": str(user.id),
-            "email": user.email,
-            "nickname": user.nickname
-        }
-    })
+    # 6) 프론트엔드로 리다이렉트
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    return RedirectResponse(f"{frontend_url}/dashboard?login=success")
+
+# --------------------------------------------------------------
+# 사용자 정보 API
+# --------------------------------------------------------------
+@app.get("/auth/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """현재 로그인한 사용자 정보 반환"""
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "nickname": current_user.nickname,
+        "social_provider": current_user.social_provider,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
+# --------------------------------------------------------------
+# 로그아웃 API
+# --------------------------------------------------------------
+@app.post("/auth/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """로그아웃 - 세션 삭제 및 쿠키 제거"""
+    
+    # 세션 찾기
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if session_id:
+        # 세션 삭제
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.session_id == session_id,
+                UserSession.user_id == current_user.id
+            )
+        )
+        user_session = result.scalar_one_or_none()
+        
+        if user_session:
+            await db.delete(user_session)
+            await db.commit()
+    
+    # 쿠키 제거
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        domain=None
+    )
+    
+    return {"message": "로그아웃 성공"}
 
 @app.get("/")
 async def root():

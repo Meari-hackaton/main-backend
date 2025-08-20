@@ -19,17 +19,12 @@ class MeariSessionRequest(BaseModel):
         description="사용자가 입력한 구체적인 고민/상황",
         max_length=500
     )
-    user_id: Optional[UUID] = Field(
-        None,
-        description="사용자 ID (선택사항)"
-    )
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "selected_tag_id": 2,
-                "user_context": "매일 야근하고 주말에도 일해야 해서 너무 지쳐있어요. 회사를 그만두고 싶은데 다음 직장을 구할 수 있을지 불안합니다.",
-                "user_id": None
+                "user_context": "매일 야근하고 주말에도 일해야 해서 너무 지쳐있어요. 회사를 그만두고 싶은데 다음 직장을 구할 수 있을지 불안합니다."
             }
         }
     )
@@ -53,10 +48,6 @@ class GrowthContentRequest(BaseModel):
         default_factory=list,
         description="이미 본 정책 ID 리스트 (중복 방지용)"
     )
-    user_id: Optional[UUID] = Field(
-        None,
-        description="사용자 ID"
-    )
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -64,8 +55,7 @@ class GrowthContentRequest(BaseModel):
                 "context": "initial",
                 "session_id": "123e4567-e89b-12d3-a456-426614174000",
                 "persona_summary": "번아웃으로 지친 청년 직장인",
-                "previous_policy_ids": ["POL001", "POL002"],
-                "user_id": None
+                "previous_policy_ids": ["POL001", "POL002"]
             }
         }
     )
@@ -88,18 +78,13 @@ class RitualRequest(BaseModel):
         default_factory=list,
         description="본 성장 콘텐츠 ID 리스트"
     )
-    user_id: Optional[UUID] = Field(
-        None,
-        description="사용자 ID"
-    )
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "diary_entry": "오늘은 추천받은 명상을 시도해봤어요. 생각보다 마음이 편안해졌습니다.",
                 "selected_mood": "hopeful",
-                "growth_contents_viewed": ["card_001", "card_002"],
-                "user_id": None
+                "growth_contents_viewed": ["card_001", "card_002"]
             }
         }
     )
