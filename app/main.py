@@ -13,7 +13,7 @@ from typing import Optional
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.auth import get_current_user, get_optional_user
-from app.core.workflow_manager import initialize_workflow
+# from app.core.workflow_manager import initialize_workflow
 from app.api.v1.api import api_router
 from app.models.user import User, UserSession
 
@@ -34,11 +34,11 @@ app.add_middleware(
 # API 라우터 등록
 app.include_router(api_router, prefix="/api/v1")
 
-@app.on_event("startup")
-async def startup_event():
-    """서버 시작 시 워크플로우 및 연결 초기화"""
-    initialize_workflow()
-    print(f"🌐 API 문서: http://localhost:8001/docs")
+# @app.on_event("startup")
+# async def startup_event():
+#     """서버 시작 시 워크플로우 및 연결 초기화"""
+#     # initialize_workflow()
+#     print(f"🌐 API 문서: http://localhost:8001/docs")
 
 # OAuth 환경 변수
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")

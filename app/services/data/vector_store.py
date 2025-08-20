@@ -342,6 +342,52 @@ class VectorStore:
             })
         
         return formatted_results
+
+
+def get_quotes_collection() -> Collection:
+    """인용문 컬렉션 가져오기 (싱글톤)"""
+    try:
+        # 연결 확인
+        if not connections.has_connection("default"):
+            uri = os.getenv("MILVUS_URI")
+            token = os.getenv("MILVUS_TOKEN")
+            connections.connect(
+                alias="default",
+                uri=uri,
+                token=token,
+                secure=True
+            )
+        
+        # 컬렉션 로드
+        collection = Collection("meari_quotes")
+        collection.load()
+        return collection
+    except Exception as e:
+        logger.error(f"인용문 컬렉션 가져오기 실패: {e}")
+        raise
+
+
+def get_policies_collection() -> Collection:
+    """정책 컬렉션 가져오기 (싱글톤)"""
+    try:
+        # 연결 확인
+        if not connections.has_connection("default"):
+            uri = os.getenv("MILVUS_URI")
+            token = os.getenv("MILVUS_TOKEN")
+            connections.connect(
+                alias="default",
+                uri=uri,
+                token=token,
+                secure=True
+            )
+        
+        # 컬렉션 로드
+        collection = Collection("meari_policies")
+        collection.load()
+        return collection
+    except Exception as e:
+        logger.error(f"정책 컬렉션 가져오기 실패: {e}")
+        raise
     
     async def search_policies(
         self,
@@ -392,3 +438,49 @@ class VectorStore:
             })
         
         return formatted_results
+
+
+def get_quotes_collection() -> Collection:
+    """인용문 컬렉션 가져오기 (싱글톤)"""
+    try:
+        # 연결 확인
+        if not connections.has_connection("default"):
+            uri = os.getenv("MILVUS_URI")
+            token = os.getenv("MILVUS_TOKEN")
+            connections.connect(
+                alias="default",
+                uri=uri,
+                token=token,
+                secure=True
+            )
+        
+        # 컬렉션 로드
+        collection = Collection("meari_quotes")
+        collection.load()
+        return collection
+    except Exception as e:
+        logger.error(f"인용문 컬렉션 가져오기 실패: {e}")
+        raise
+
+
+def get_policies_collection() -> Collection:
+    """정책 컬렉션 가져오기 (싱글톤)"""
+    try:
+        # 연결 확인
+        if not connections.has_connection("default"):
+            uri = os.getenv("MILVUS_URI")
+            token = os.getenv("MILVUS_TOKEN")
+            connections.connect(
+                alias="default",
+                uri=uri,
+                token=token,
+                secure=True
+            )
+        
+        # 컬렉션 로드
+        collection = Collection("meari_policies")
+        collection.load()
+        return collection
+    except Exception as e:
+        logger.error(f"정책 컬렉션 가져오기 실패: {e}")
+        raise

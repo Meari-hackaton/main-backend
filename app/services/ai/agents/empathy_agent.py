@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from app.models.news import News
+from app.services.data.vector_store import get_quotes_collection
 import numpy as np
 import os
 

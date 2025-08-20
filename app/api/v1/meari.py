@@ -21,7 +21,7 @@ from app.schemas.meari import (
 )
 from app.models.card import MeariSession, GeneratedCard
 from app.models.checkin import AIPersonaHistory, Ritual, HeartTree
-from app.core.workflow_manager import get_workflow
+from app.services.ai.workflow import MeariWorkflow
 
 router = APIRouter(
     prefix="/meari",
@@ -65,7 +65,6 @@ async def create_meari_session(
             workflow.process_request,
             workflow_request
         )
-        # workflow.close() 제거 - 전역 인스턴스는 닫지 않음
         
         # 디버깅: 결과 확인
         print(f"워크플로우 결과 키: {list(workflow_result.keys())}")

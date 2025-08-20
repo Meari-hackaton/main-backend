@@ -11,7 +11,7 @@ from app.models.user import User, UserSession
 
 
 async def get_current_user(
-    session_id: Optional[str] = Cookie(None, alias="meari_session"),
+    session_id: Optional[str] = Cookie(None, alias="session"),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
@@ -64,7 +64,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    session_id: Optional[str] = Cookie(None, alias="meari_session"),
+    session_id: Optional[str] = Cookie(None, alias="session"),
     db: AsyncSession = Depends(get_db)
 ) -> Optional[User]:
     """
