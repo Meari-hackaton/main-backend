@@ -41,6 +41,14 @@ class GrowthContentRequest(BaseModel):
         ...,
         description="컨텍스트 구분 (initial: 첫 방문, ritual: 리츄얼 후)"
     )
+    session_id: UUID = Field(
+        ...,
+        description="메아리 세션 ID"
+    )
+    persona_summary: Optional[str] = Field(
+        None,
+        description="현재 페르소나 요약"
+    )
     previous_policy_ids: List[str] = Field(
         default_factory=list,
         description="이미 본 정책 ID 리스트 (중복 방지용)"
@@ -54,6 +62,8 @@ class GrowthContentRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "context": "initial",
+                "session_id": "123e4567-e89b-12d3-a456-426614174000",
+                "persona_summary": "번아웃으로 지친 청년 직장인",
                 "previous_policy_ids": ["POL001", "POL002"],
                 "user_id": None
             }
