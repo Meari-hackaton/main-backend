@@ -73,7 +73,7 @@ def google_login():
     
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": "http://localhost:8001/auth/google/callback",
+        "redirect_uri": "http://localhost:8000/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline"
@@ -101,7 +101,7 @@ async def google_callback(
                 "code": code,
                 "client_id": GOOGLE_CLIENT_ID,
                 "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": "http://localhost:8001/auth/google/callback",
+                "redirect_uri": "http://localhost:8000/auth/google/callback",
                 "grant_type": "authorization_code",
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -150,7 +150,11 @@ async def google_callback(
     db.add(user_session)
     await db.commit()
 
-    # 5) 쿠키 설정
+    # 5) 프론트엔드로 리다이렉트 (쿠키 포함)
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    response = RedirectResponse(f"{frontend_url}/dashboard?login=success")
+    
+    # 6) 리다이렉트 응답에 쿠키 설정
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,
@@ -160,10 +164,8 @@ async def google_callback(
         max_age=SESSION_EXPIRES_DAYS * 24 * 60 * 60,
         path="/"
     )
-
-    # 6) 프론트엔드로 리다이렉트
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    return RedirectResponse(f"{frontend_url}/dashboard?login=success")
+    
+    return response
 
 # --------------------------------------------------------------
 # 사용자 정보 API
