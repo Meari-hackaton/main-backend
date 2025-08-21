@@ -27,6 +27,109 @@ router = APIRouter(
     tags=["dashboard"]
 )
 
+# 테스트용 더미 사용자 ID
+TEST_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+
+
+@router.get(
+    "/test",
+    response_model=DashboardResponse,
+    summary="대시보드 테스트 (인증 없음)",
+    description="테스트용 대시보드 데이터 조회"
+)
+async def get_dashboard_test(
+    db: AsyncSession = Depends(get_db)
+) -> DashboardResponse:
+    """테스트용 대시보드 데이터"""
+    
+    user_id = TEST_USER_ID
+    today = date.today()
+    
+    # 1. 마음나무 상태
+    stmt = select(HeartTree).where(HeartTree.user_id == user_id)
+    result = await db.execute(stmt)
+    heart_tree = result.scalar_one_or_none()
+    
+    tree_level = heart_tree.growth_level if heart_tree else 1  # 기본값 1
+    tree_stage = _get_tree_stage(tree_level)
+    
+    # 2. 연속 기록 조회 또는 생성
+    stmt = select(UserStreak).where(UserStreak.user_id == user_id)
+    result = await db.execute(stmt)
+    streak = result.scalar_one_or_none()
+    
+    if not streak:
+        # 테스트용 기본값
+        streak = UserStreak(
+            user_id=user_id,
+            current_streak=1,
+            longest_streak=1,
+            total_days_active=1,
+            total_rituals_completed=0,
+            total_rituals_created=0
+        )
+    
+    # 3. 오늘의 리츄얼
+    stmt = select(DailyRitual).where(
+        and_(
+            DailyRitual.user_id == user_id,
+            DailyRitual.date == today
+        )
+    )
+    result = await db.execute(stmt)
+    today_ritual = result.scalar_one_or_none()
+    
+    # 4. 이번 달 완료 일수
+    first_day = date(today.year, today.month, 1)
+    stmt = select(func.count(DailyRitual.id)).where(
+        and_(
+            DailyRitual.user_id == user_id,
+            DailyRitual.date >= first_day,
+            DailyRitual.is_completed == True
+        )
+    )
+    result = await db.execute(stmt)
+    monthly_completed = result.scalar() or 0
+    
+    # 5. 알림 메시지 생성
+    notifications = []
+    if not today_ritual:
+        notifications.append({
+            "type": "ritual",
+            "message": "오늘의 리츄얼을 확인해보세요",
+            "icon": "ritual"
+        })
+    
+    from app.schemas.dashboard import TreeStatus, Statistics, TodayRitual, Notification
+    
+    # notifications를 Notification 모델로 변환
+    notification_objects = [
+        Notification(**notif) for notif in notifications
+    ]
+    
+    return DashboardResponse(
+        tree=TreeStatus(
+            level=tree_level,
+            stage=tree_stage["stage"],
+            stage_label=tree_stage["label"],
+            next_milestone=tree_stage["next_milestone"],
+            percentage=min(tree_level / 28 * 100, 100)
+        ),
+        statistics=Statistics(
+            continuous_days=streak.current_streak or 0,
+            total_rituals=streak.total_rituals_completed or 0,
+            practiced_rituals=getattr(streak, 'total_rituals_created', 0),
+            monthly_completed=int(monthly_completed)
+        ),
+        today_ritual=TodayRitual(
+            id=today_ritual.id if today_ritual else None,
+            title=today_ritual.ritual_title if today_ritual else "오늘의 리츄얼 받기",
+            is_completed=today_ritual.is_completed if today_ritual else False,
+            type=today_ritual.ritual_type if today_ritual else "growth_experience"
+        ),
+        notifications=notification_objects
+    )
+
 
 @router.get(
     "/",
@@ -62,7 +165,8 @@ async def get_dashboard(
             current_streak=0,
             longest_streak=0,
             total_days_active=0,
-            total_rituals_completed=0
+            total_rituals_completed=0,
+            total_rituals_created=0
         )
         db.add(streak)
         await db.flush()
@@ -111,27 +215,34 @@ async def get_dashboard(
             "icon": "trophy"
         })
     
+    from app.schemas.dashboard import TreeStatus, Statistics, TodayRitual, Notification
+    
+    # notifications를 Notification 모델로 변환
+    notification_objects = [
+        Notification(**notif) for notif in notifications
+    ]
+    
     return DashboardResponse(
-        tree={
-            "level": tree_level,
-            "stage": tree_stage["stage"],
-            "stage_label": tree_stage["label"],
-            "next_milestone": tree_stage["next_milestone"],
-            "percentage": min(tree_level / 28 * 100, 100)
-        },
-        statistics={
-            "continuous_days": streak.current_streak,
-            "total_rituals": streak.total_rituals_completed,
-            "practiced_rituals": streak.total_rituals_created,
-            "monthly_completed": monthly_completed
-        },
-        today_ritual={
-            "id": today_ritual.id if today_ritual else None,
-            "title": today_ritual.ritual_title if today_ritual else None,
-            "is_completed": today_ritual.is_completed if today_ritual else False,
-            "type": today_ritual.ritual_type if today_ritual else None
-        } if today_ritual else None,
-        notifications=notifications
+        tree=TreeStatus(
+            level=tree_level,
+            stage=tree_stage["stage"],
+            stage_label=tree_stage["label"],
+            next_milestone=tree_stage["next_milestone"],
+            percentage=min(tree_level / 28 * 100, 100)
+        ),
+        statistics=Statistics(
+            continuous_days=streak.current_streak,
+            total_rituals=streak.total_rituals_completed,
+            practiced_rituals=getattr(streak, 'total_rituals_created', 0),
+            monthly_completed=int(monthly_completed)
+        ),
+        today_ritual=TodayRitual(
+            id=today_ritual.id if today_ritual else None,
+            title=today_ritual.ritual_title if today_ritual else "오늘의 리츄얼 받기",
+            is_completed=today_ritual.is_completed if today_ritual else False,
+            type=today_ritual.ritual_type if today_ritual else "growth_experience"
+        ),
+        notifications=notification_objects
     )
 
 
