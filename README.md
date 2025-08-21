@@ -1,232 +1,339 @@
-# Meari Backend
+# 메아리(Meari) 백엔드 API 서버
 
-메아리(Meari) - 사회적 고립을 겪는 청년을 위한 AI 심리회복 서비스 백엔드
+청년의 마음 건강을 위한 AI 심리회복 서비스 백엔드
 
-## 목차
-1. [필수 준비사항](#필수-준비사항)
-2. [프로젝트 설치 및 실행](#프로젝트-설치-및-실행)
-3. [데이터베이스 구조](#데이터베이스-구조)
-4. [회원 시스템 설계](#회원-시스템-설계)
-5. [API 개발 가이드](#api-개발-가이드)
+## 🚀 빠른 시작 (Docker Compose 사용 - 권장)
 
-## 필수 준비사항
+### 팀원을 위한 가장 간단한 실행 방법
 
-### 1. Python 3.10 이상
 ```bash
-# 버전 확인
-python --version
-# 또는
-python3 --version
+# 1. 저장소 클론
+git clone https://github.com/your-org/meari-backend.git
+cd meari-backend
+
+# 2. .env 파일 받기 (팀 리더에게 요청)
+# .env 파일을 프로젝트 루트에 저장
+
+# 3. Docker Compose로 전체 환경 실행 (PostgreSQL 포함)
+docker-compose -f docker-compose-simple.yml up
+
+# 서버가 http://localhost:8000 에서 실행됩니다
+# API 문서: http://localhost:8000/docs
 ```
 
-### 2. Docker Desktop
-- [Docker Desktop 다운로드](https://www.docker.com/products/docker-desktop/)
-- 설치 후 실행 
+**Docker 설치 필요**: [Docker Desktop 다운로드](https://www.docker.com/products/docker-desktop/)
 
-### 3. Git
+### psql 없이도 작동합니다!
+- Docker Compose가 PostgreSQL을 자동으로 설정
+- 887개 뉴스, 3,977개 정책 등 모든 데이터 자동 로드
+- Neo4j, Milvus는 클라우드 서비스 사용 (.env 파일에 설정됨)
+
+---
+
+## 📋 목차
+1. [프로젝트 개요](#프로젝트-개요)
+2. [기술 스택](#기술-스택)
+3. [설치 방법 선택](#설치-방법-선택)
+4. [Docker 사용 (권장)](#docker-사용-권장)
+5. [로컬 설치](#로컬-설치)
+6. [API 문서](#api-문서)
+7. [트러블슈팅](#트러블슈팅)
+
+## 프로젝트 개요
+
+메아리는 사회적 고립을 겪는 청년을 위한 AI 기반 심리회복 서비스입니다.
+- 공감 카드와 성찰 카드를 통한 정서적 지원
+- 맞춤형 성장 콘텐츠 추천 (정보/경험/지원)
+- 28일 리츄얼을 통한 마음나무 성장
+- 페르소나 기반 개인화 서비스
+
+## 기술 스택
+
+- **Framework**: FastAPI 0.116.1
+- **Database**: PostgreSQL + SQLAlchemy 2.0
+- **Vector DB**: Milvus (Zilliz Cloud)
+- **Graph DB**: Neo4j (Aura Cloud)
+- **AI/LLM**: Google Gemini, LangChain, LangGraph
+- **Embedding**: KURE-v1 (한국어 특화)
+- **Python**: 3.12 (Docker) / 3.11+ (로컬)
+
+## 설치 방법 선택
+
+### 방법 1: Docker 사용 (권장) ✅
+- PostgreSQL 설치 불필요
+- 모든 데이터 자동 로드
+- 팀원 간 환경 일치 보장
+
+### 방법 2: 로컬 설치
+- Python 가상환경 사용
+- PostgreSQL 별도 설치 필요
+- 개발 시 더 빠른 반응 속도
+
+## Docker 사용 (권장)
+
+### 필요한 파일
+팀 리더로부터 받아야 할 파일:
+1. **`.env`** - 환경 변수 파일 (API 키, 클라우드 DB 연결 정보)
+2. **`meari_db_dump.sql`** - PostgreSQL 초기 데이터 (7.2MB)
+
+### Docker Compose 파일 2종
+
+#### 1. 개발/일반 사용 (docker-compose-simple.yml)
 ```bash
-# 설치 확인
-git --version
+# 단일 앱 인스턴스 실행
+docker-compose -f docker-compose-simple.yml up
+
+# 백그라운드 실행
+docker-compose -f docker-compose-simple.yml up -d
+
+# 로그 확인
+docker-compose -f docker-compose-simple.yml logs -f app
+
+# 종료
+docker-compose -f docker-compose-simple.yml down
 ```
 
-## 프로젝트 설치 및 실행
+#### 2. 30명 동시 테스트용 (docker-compose.yml)
+```bash
+# 6개 앱 인스턴스 + Nginx 로드밸런서
+docker-compose up
+
+# 30명 동시 테스트 실행
+./test_concurrent_30.sh
+```
+
+### Docker 환경 초기화
+```bash
+# 모든 컨테이너와 볼륨 삭제 (데이터 초기화)
+docker-compose down -v
+
+# 다시 시작 (데이터 자동 재로드)
+docker-compose -f docker-compose-simple.yml up
+```
+
+## 로컬 설치
+
+### 필수 준비사항
+- Python 3.11+ (3.13은 호환성 문제 있음)
+- PostgreSQL 15+
+- Git
 
 ### 1. 저장소 클론
 ```bash
-git clone https://github.com/Meari-hackaton/main-backend.git
-cd main-backend
+git clone https://github.com/your-org/meari-backend.git
+cd meari-backend
 ```
 
 ### 2. Python 가상환경 설정
 ```bash
 # 가상환경 생성
-python3 -m venv venv
+python -m venv venv
 
 # 가상환경 활성화
-# Mac/Linux:
+# macOS/Linux:
 source venv/bin/activate
-
 # Windows:
 venv\Scripts\activate
-
-# 활성화 확인 (터미널 앞에 (venv) 뜨면 된겁니다)
 ```
 
-### 3. 패키지 설치
+### 3. 의존성 설치
 ```bash
-# pip 최신 버전으로 업그레이드 (필수에요)
-pip install --upgrade pip
-
-# 전체 패키지 설치
 pip install -r requirements.txt
 ```
 
-**설치 에러 발생 시:**
-```bash
-# 핵심 패키지만 먼저 설치
-pip install greenlet
-pip install psycopg2-binary
-pip install sqlalchemy asyncpg
-pip install fastapi uvicorn
-pip install pydantic-settings python-dotenv
+### 4. PostgreSQL 설정
 
-# 다시 전체 설치 시도
-pip install -r requirements.txt
+#### macOS (Homebrew)
+```bash
+brew install postgresql@15
+brew services start postgresql@15
 ```
 
-### 4. Docker로 PostgreSQL 실행
+#### Ubuntu/Debian
 ```bash
-# Docker Desktop 켜놓고 실행하면 됩니다
-
-# PostgreSQL 컨테이너 시작
-docker-compose up -d
-
-# 실행 확인 (아래와 같이 나와야 함)
-docker ps
-# CONTAINER ID   IMAGE         ... STATUS         PORTS                    NAMES
-# xxxxxx         postgres:16   ... Up X minutes   0.0.0.0:5432->5432/tcp   main-backend-db-1
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
 ```
 
-### 5. 데이터베이스 테이블 생성
+#### Windows
+[PostgreSQL 공식 다운로드](https://www.postgresql.org/download/windows/)
+
+### 5. 데이터베이스 생성 및 복원
 ```bash
-# 5초 정도 대기 (DB가 완전히 시작되도록)
-sleep 5
+# PostgreSQL 접속
+psql -U postgres
 
-# 테이블 생성
-python -m app.db.init_db
+# 데이터베이스 생성
+CREATE DATABASE meari_db;
+CREATE USER meari_user WITH PASSWORD 'meari_password';
+GRANT ALL PRIVILEGES ON DATABASE meari_db TO meari_user;
+\q
 
-# 성공 메시지 확인:
-# 테이블 생성 완료
-# 
-# 생성된 테이블 목록:
-#   - ai_persona_histories
-#   - daily_checkins
-#   - generated_cards
-#   - heart_trees
-#   - meari_sessions
-#   - tags
-#   - user_sessions
-#   - users
+# 데이터 복원 (meari_db_dump.sql 파일 필요)
+psql -U meari_user -d meari_db < meari_db_dump.sql
 ```
 
 ### 6. 서버 실행
 ```bash
-uvicorn app.main:app --reload
+# 개발 모드 (자동 리로드)
+uvicorn app.main:app --reload --port 8001
 
-# 실행 확인:
-# INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+# 또는
+python -m uvicorn app.main:app --reload --port 8001
 ```
 
-### 7. 접속 확인
-- API 문서: http://localhost:8000/docs -- swagger
-- 헬스체크: http://localhost:8000/ -- 서버 멀쩡한지 확인
+## 환경 변수 (.env)
 
-## 데이터베이스 구조
+필수 환경 변수 (팀 리더에게 요청):
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://meari_user:meari_password@localhost/meari_db
 
-### 주요 테이블
-```
-users               # 사용자 정보
-├── user_sessions   # 로그인 세션
-├── meari_sessions  # 분석 요청 기록
-├── generated_cards # AI가 생성한 카드
-├── daily_checkins  # 매일 체크인
-├── heart_trees     # 마음나무 (1:1)
-└── persona_histories # AI 페르소나 이력
+# API Keys
+GEMINI_API_KEY=your-gemini-api-key
+BIGKINDS_ACCESS_KEY=your-bigkinds-key
+YOUTH_POLICY_API_KEY=your-youth-policy-key
 
-tags                # 태그 마스터 데이터
-```
+# Cloud Services (이미 데이터 준비됨)
+MILVUS_URI=https://xxx.zillizcloud.com
+MILVUS_TOKEN=your-milvus-token
+NEO4J_URI=neo4j+s://xxx.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-neo4j-password
 
-### 데이터베이스 접속 정보
-```
-Host: localhost
-Port: 5432
-Database: meari_db
-Username: meari_user
-Password: meari_password
+# OAuth (Optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
-## 회원 시스템 설계
+## 클라우드 서비스 상태
 
-### 인증 방식: 세션 기반
-- JWT 대신 서버 세션 사용 (구현 용이)
-- 소셜 로그인만 지원 (Google, Kakao)
-- 일반 회원가입 없음
+모든 클라우드 서비스는 이미 데이터가 준비되어 있습니다:
+- **Milvus (Zilliz Cloud)**: ✅ 877개 인용문, 3,977개 정책 벡터
+- **Neo4j (Aura Cloud)**: ✅ 5,262개 노드, 15,257개 관계
+- **PostgreSQL**: Docker 사용 시 자동 로드, 로컬은 덤프 파일 복원 필요
 
-### 회원 관련 테이블 구조
+⚠️ **중요**: Neo4j와 Milvus는 클라우드 서비스를 사용합니다. 
+- 팀원들은 `.env` 파일의 연결 정보로 자동 연결됩니다
+- 데이터 수집 스크립트(`scripts/collect_*.py`)는 실행하지 마세요 (이미 완료됨)
+- 로컬 Neo4j/Milvus 설치 불필요
 
-#### 1. users 테이블
-```sql
-- id: UUID (기본키)
-- social_provider: 'google' 또는 'kakao'
-- social_id: 소셜 서비스에서 받은 고유 ID
-- email: 이메일 (unique)
-- nickname: 닉네임
-- created_at: 가입일시
+## API 문서
+
+서버 실행 후:
+- **Swagger UI**: http://localhost:8000/docs (Docker)
+- **Swagger UI**: http://localhost:8001/docs (로컬)
+- **ReDoc**: http://localhost:8000/redoc
+
+### 주요 엔드포인트
+
+#### 메아리 세션
+- `POST /api/v1/meari/sessions` - 초기 세션 생성 (공감/성찰 카드)
+- `POST /api/v1/meari/growth-contents` - 성장 콘텐츠 생성
+- `POST /api/v1/meari/rituals` - 리츄얼 기록
+
+#### 대시보드
+- `GET /api/v1/dashboard/` - 대시보드 메인
+- `GET /api/v1/dashboard/calendar` - 월별 캘린더
+- `POST /api/v1/dashboard/rituals` - 일일 리츄얼 생성
+
+## 트러블슈팅
+
+### Docker 관련
+
+#### 포트 충돌
+```
+Error: bind: address already in use
+```
+**해결**: 
+```bash
+# 기존 PostgreSQL 중지
+sudo systemctl stop postgresql
+# 또는 Docker Compose 포트 변경
 ```
 
-#### 2. user_sessions 테이블
-```sql
-- session_id: 세션 ID (기본키)
-- user_id: 사용자 ID (외래키)
-- expires_at: 만료 시간
-- created_at: 생성 시간
+#### 메모리 부족
+```
+Error: Cannot allocate memory
+```
+**해결**: Docker Desktop 설정에서 메모리 할당 증가 (최소 4GB)
+
+### 로컬 설치 관련
+
+#### psql 명령어 없음
+```
+command not found: psql
+```
+**해결**: Docker Compose 사용 또는 PostgreSQL 클라이언트 설치
+
+#### Python 3.13 호환성 문제
+```
+RuntimeError: Could not parse python long as longdouble
+```
+**해결**: Python 3.12 또는 3.11 사용
+
+### API 관련
+
+#### 동시 사용자 제한
+- 단일 인스턴스: 3-5명
+- Docker Compose (6 인스턴스): 30명
+- Gemini API 제한: 분당 10 요청
+
+#### 응답 시간이 느림 (30-60초)
+정상입니다. AI 처리에 시간이 필요합니다:
+- 공감 카드: Vector RAG (Milvus)
+- 성찰 카드: Graph RAG (Neo4j)
+- 페르소나 생성: LLM 처리
+
+## 개발 팁
+
+### 로그 확인
+```bash
+# Docker 로그
+docker-compose -f docker-compose-simple.yml logs -f
+
+# 로컬 실행 시 터미널에 직접 출력
 ```
 
-### 로그인 플로우
-```
-1. 프론트엔드 → 소셜 로그인 요청
-2. 소셜 서비스 → 인증 후 콜백
-3. 백엔드 → 사용자 정보 확인/생성
-4. 백엔드 → 세션 생성 및 쿠키 발급
-5. 프론트엔드 → 세션 쿠키로 인증 유지
-```
+### 데이터베이스 접속
+```bash
+# Docker PostgreSQL 접속
+docker exec -it meari-postgres psql -U meari_user -d meari_db
 
-### 구현 예시 (추후 개발)
-```python
-# app/api/v1/auth.py
-@router.get("/auth/google")
-async def google_login():
-    # Google OAuth URL로 리다이렉트
-    pass
+# 테이블 확인
+\dt
 
-@router.get("/auth/google/callback")
-async def google_callback(code: str):
-    # 1. Google에서 사용자 정보 받기
-    # 2. DB에서 사용자 조회/생성
-    # 3. 세션 생성
-    # 4. 쿠키 설정 후 프론트엔드로 리다이렉트
-    pass
+# 데이터 개수 확인
+SELECT COUNT(*) FROM news;  -- 887개
+SELECT COUNT(*) FROM youth_policies;  -- 3,977개
 ```
 
-## API 개발 가이드
+### 테스트 실행
+```bash
+# 단일 사용자 테스트
+curl -X POST http://localhost:8000/api/v1/meari/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"selected_tag_id": 1}'
 
-### 파일 구조
-```
-app/
-├── api/v1/
-│   ├── auth.py      # 인증 관련 (소셜 로그인)
-│   ├── users.py     # 사용자 정보
-│   ├── cards.py     # 메아리 카드 생성/조회
-│   ├── tags.py      # 태그 목록
-│   └── checkins.py  # 데일리 체크인
+# 동시 사용자 테스트
+./test_concurrent3.sh
 ```
 
-### 인증이 필요한 API (상태관리에 필수로 상호작용되는 부분 프론트에서 전역으로 관리할 api 구조가 이런 형태?일겁니다.)
-```python
-from fastapi import Depends
-from app.api.deps import get_current_user
+## 지원
 
-@router.get("/me")
-async def get_my_info(current_user: User = Depends(get_current_user)):
-    return current_user
-```
+문제 발생 시:
+1. 이 README의 트러블슈팅 섹션 확인
+2. 팀 슬랙 채널에 문의
+3. 프로젝트 리더에게 직접 연락
 
-### API 명세 (구현 예정)
-- `POST /api/v1/auth/google` - 구글 로그인
-- `POST /api/v1/auth/kakao` - 카카오 로그인
-- `POST /api/v1/auth/logout` - 로그아웃
-- `GET /api/v1/me` - 내 정보
-- `GET /api/v1/tags` - 태그 목록
-- `POST /api/v1/cards` - 카드 생성
-- `GET /api/v1/cards` - 내 카드 목록
-- `POST /api/v1/checkins` - 데일리 체크인
+## 라이센스
+
+This project is proprietary and confidential.
+
+---
+
+**Note**: 
+- `.env` 파일과 `meari_db_dump.sql`은 절대 Git에 커밋하지 마세요!
+- 개발 시 docker-compose-simple.yml 사용 권장
+- 성능 테스트 시에만 docker-compose.yml (6 인스턴스) 사용

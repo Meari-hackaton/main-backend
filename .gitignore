@@ -36,7 +36,7 @@ Thumbs.db
 
 # Claude related files
 claude*
-CLAUDE*
+../CLAUDE.md
 *.claude
 .claude/
 
@@ -64,3 +64,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+
+firebase-admin-key.json

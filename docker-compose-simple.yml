@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스 (기존 데이터 포함)
+  postgres:
+    image: postgres:15-alpine
+    container_name: meari-postgres
+    environment:
+      POSTGRES_DB: meari_db
+      POSTGRES_USER: meari_user
+      POSTGRES_PASSWORD: meari_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./meari_db_dump.sql:/docker-entrypoint-initdb.d/01_meari_db_dump.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - meari-network
+
+  # 단일 애플리케이션 인스턴스 (개발용)
+  app:
+    build: .
+    container_name: meari-app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://meari_user:meari_password@postgres/meari_db
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    networks:
+      - meari-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+
+networks:
+  meari-network:
+    driver: bridge

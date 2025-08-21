@@ -5,10 +5,12 @@ from app.models.checkin import Ritual, HeartTree, AIPersonaHistory
 from app.models.news import News, NewsQuote
 from app.models.policy import YouthPolicy
 from app.models.history import UserContentHistory
+from app.models.daily import DailyRitual, UserStreak, RitualTemplate
 
 __all__ = [
     "User", "UserSession", "Tag", 
     "MeariSession", "GeneratedCard",
     "Ritual", "HeartTree", "AIPersonaHistory",
-    "News", "NewsQuote", "YouthPolicy", "UserContentHistory"
+    "News", "NewsQuote", "YouthPolicy", "UserContentHistory",
+    "DailyRitual", "UserStreak", "RitualTemplate"
 ]
