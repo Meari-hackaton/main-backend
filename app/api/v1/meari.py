@@ -168,6 +168,35 @@ async def create_growth_contents(
         # 인증된 사용자 ID 사용
         user_id = current_user.id
         
+        # 오늘 이미 생성된 growth 카드가 있는지 확인
+        from datetime import date, timedelta
+        today = date.today()
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        
+        stmt = select(GeneratedCard).where(
+            GeneratedCard.user_id == user_id,
+            GeneratedCard.card_type == "growth",
+            GeneratedCard.created_at >= today_start,
+            GeneratedCard.created_at < today_end
+        )
+        result = await db.execute(stmt)
+        existing_cards = result.scalars().all()
+        
+        # 이미 오늘 생성된 카드가 있으면 그것을 반환
+        if existing_cards and request.context == "initial":
+            cards_dict = {}
+            for card in existing_cards:
+                if card.sub_type:
+                    cards_dict[card.sub_type] = card.content
+            
+            return GrowthContentResponse(
+                status="success",
+                content_type="growth",
+                timestamp=datetime.utcnow(),
+                cards=cards_dict
+            )
+        
         # 최신 페르소나 가져오기
         persona_summary = request.persona_summary
         if not persona_summary and user_id:

@@ -42,25 +42,28 @@ class GrowthAgent:
     def _create_info_prompt(self) -> ChatPromptTemplate:
         """정보 콘텐츠 생성 프롬프트"""
         
-        system_message = """사용자 상황에 맞는 유용한 정보를 제공하세요.
+        system_message = """당신은 한국 청년(19-34세)의 고민을 이해하고 실질적인 도움을 주는 상담사입니다.
+사용자의 상황에 맞는 실용적이고 구체적인 정보를 제공하세요.
 
 ## 응답 형식 (JSON):
 {{
-    "title": "구체적인 제목",
-    "content": "200-300자의 핵심 정보와 실용적 조언",
-    "summary": "한 줄 요약",
-    "search_query": "관련 검색어",
-    "key_points": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"]
+    "title": "번아웃 극복을 위한 일상 회복법",  
+    "content": "번아웃은 장기간의 과도한 스트레스로 인한 신체적, 정서적 소진 상태입니다. 회복을 위해서는 먼저 충분한 휴식이 필요합니다. 업무 시간과 개인 시간의 경계를 명확히 하고, 퇴근 후에는 업무 연락을 차단하세요. 주말에는 좋아하는 취미 활동이나 가벼운 운동으로 에너지를 충전하는 것이 중요합니다. 필요하다면 전문 상담사의 도움을 받는 것도 좋은 방법입니다.",
+    "summary": "번아웃 회복을 위한 일과 삶의 균형 찾기",
+    "search_query": "직장인 번아웃 극복 방법",
+    "key_points": ["업무와 개인 시간 분리하기", "규칙적인 휴식과 운동", "전문가 상담 고려"]
 }}
 
-## 원칙:
-1. 실용적이고 구체적인 정보 제공
-2. 즉시 활용 가능한 팁 포함
-3. 공감적이고 희망적인 톤"""
+## 작성 원칙:
+1. 한국 청년이 실제로 겪는 문제(취업, 직장, 관계, 건강 등)에 대한 실질적 조언
+2. 바로 실천 가능한 구체적인 방법 제시
+3. 관련 정책이나 지원 서비스 정보 포함 가능
+4. 위로보다는 해결책 중심
+5. 200-300자 내외의 명확한 설명"""
         
         human_template = """사용자 상황: {user_context}
 
-위 상황에 도움이 될 정보를 JSON 형식으로 제공하세요:"""
+위 상황에 실질적으로 도움이 될 정보를 JSON 형식으로 제공하세요:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -171,6 +174,24 @@ class GrowthAgent:
                 result = json.loads(content)
                 
                 # 필수 필드 확인 및 기본값 설정
+                # 상황별 적절한 URL 매핑
+                url_map = {
+                    "취업": "https://www.work.go.kr/seekWantedMain.do",
+                    "번아웃": "https://www.blutouch.net",
+                    "우울": "https://www.ncmh.go.kr",
+                    "정책": "https://www.youthcenter.go.kr",
+                    "상담": "https://www.129.go.kr",
+                    "건강": "https://www.mohw.go.kr"
+                }
+                
+                # 키워드 기반 URL 선택
+                default_url = "https://www.youthcenter.go.kr"
+                selected_url = default_url
+                for keyword, url in url_map.items():
+                    if keyword in user_context or keyword in result.get("title", ""):
+                        selected_url = url
+                        break
+                
                 return {
                     "type": "information",
                     "title": result.get("title", "맞춤형 정보"),
@@ -179,9 +200,9 @@ class GrowthAgent:
                     "search_query": result.get("search_query", user_context),
                     "sources": [
                         {
-                            "title": f"{result.get('title', '관련 정보')} - 추천 자료",
-                            "url": "https://www.youthcenter.go.kr",
-                            "snippet": result.get("key_points", [""])[0] if result.get("key_points") else "청년 지원 정보"
+                            "title": "관련 정보 더보기",
+                            "url": selected_url,
+                            "snippet": result.get("summary", "자세한 정보를 확인하세요")
                         }
                     ]
                 }
