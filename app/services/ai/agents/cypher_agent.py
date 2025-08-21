@@ -218,20 +218,61 @@ LIMIT 5"""
         print(f"사용자 컨텍스트: {user_context[:100]}...")
         print(f"태그 ID: {tag_id}")
         
-        # 빠른 처리를 위해 직접 쿼리 실행
-        results = self._get_optimized_results(tag_id, user_context)
-        
-        if results:
-            # 결과 구조화
-            structured_results = self._structure_graph_results(results)
-            state["cypher_query"] = "Optimized query"
-            state["graph_results"] = structured_results
-            state["graph_explanation"] = f"{len(structured_results)}개의 그래프 인사이트 발견"
-        else:
-            # 폴백
-            state["cypher_query"] = "MOCK"
-            state["graph_results"] = self._get_mock_results(tag_id)[:3]
-            state["graph_explanation"] = "모의 데이터 사용"
+        # LLM을 사용해서 자연어를 Cypher로 변환
+        try:
+            # 자연어 질문 생성
+            question = f"{user_context}의 원인과 해결책, 관련된 모든 정보를 찾아줘"
+            
+            # LLM으로 Cypher 쿼리 생성
+            cypher_result = self.generate_query(question, tag_id)
+            generated_query = cypher_result.query
+            
+            print(f"\n=== LLM이 생성한 Cypher Query ===")
+            print(f"Query 객체: {cypher_result}")
+            print(f"Query 길이: {len(generated_query)}")
+            print(f"Query 내용: {generated_query[:500] if generated_query else 'EMPTY'}")
+            
+            # 생성된 쿼리 실행
+            print(f"쿼리 실행 시작...")
+            cypher_results = self.execute_query(generated_query)
+            print(f"쿼리 실행 결과: {len(cypher_results) if cypher_results else 0}개")
+            
+            if cypher_results and len(cypher_results) > 0:
+                # LLM 생성 쿼리 성공
+                structured_results = self._structure_graph_results(cypher_results)
+                state["cypher_query"] = generated_query
+                state["graph_results"] = structured_results
+                state["graph_explanation"] = f"LLM Cypher: {len(structured_results)}개 발견"
+                print(f"LLM 쿼리 성공! state에 저장됨")
+            else:
+                # LLM 쿼리 실패 시 최적화된 쿼리 폴백
+                print(f"LLM 쿼리 실패 (결과: {cypher_results}), 최적화된 쿼리로 폴백")
+                results, optimized_query = self._get_optimized_results(tag_id, user_context)
+                
+                if results:
+                    structured_results = self._structure_graph_results(results)
+                    state["cypher_query"] = optimized_query
+                    state["graph_results"] = structured_results
+                    state["graph_explanation"] = f"최적화 쿼리: {len(structured_results)}개 발견"
+                else:
+                    state["cypher_query"] = "MOCK"
+                    state["graph_results"] = self._get_mock_results(tag_id)[:3]
+                    state["graph_explanation"] = "모의 데이터 사용"
+                    
+        except Exception as e:
+            print(f"LLM 쿼리 생성 실패: {e}")
+            # 폴백으로 최적화된 쿼리 사용
+            results, cypher_query = self._get_optimized_results(tag_id, user_context)
+            
+            if results:
+                structured_results = self._structure_graph_results(results)
+                state["cypher_query"] = cypher_query
+                state["graph_results"] = structured_results
+                state["graph_explanation"] = f"{len(structured_results)}개의 그래프 인사이트 발견"
+            else:
+                state["cypher_query"] = "MOCK"
+                state["graph_results"] = self._get_mock_results(tag_id)[:3]
+                state["graph_explanation"] = "모의 데이터 사용"
         
         state["cypher_completed"] = True
         print(f"최종 결과: {len(state['graph_results'])}개")
@@ -279,10 +320,10 @@ LIMIT 5"""
                 return True
         return False
     
-    def _get_optimized_results(self, tag_id: int, user_context: str) -> List[Dict[str, Any]]:
-        """최적화된 쿼리로 빠르게 결과 가져오기"""
+    def _get_optimized_results(self, tag_id: int, user_context: str) -> tuple[List[Dict[str, Any]], str]:
+        """최적화된 쿼리로 빠르게 결과 가져오기 (쿼리도 함께 반환)"""
         if not tag_id:
-            return []
+            return [], "EMPTY"
         
         # 태그별 핵심 키워드 (1-2개만)
         tag_keywords = {
@@ -378,12 +419,14 @@ LIMIT 5"""
                 
                 # 결과가 3개 미만이면 폴백 쿼리 실행
                 if len(data) < 3:
-                    return self._get_fallback_results(tag_id, keyword)
+                    fallback_data = self._get_fallback_results(tag_id, keyword)
+                    return fallback_data, query  # 쿼리도 함께 반환
                     
-                return data[:3]
+                return data[:3], query  # 쿼리도 함께 반환
         except Exception as e:
             print(f"쿼리 실행 실패: {e}")
-            return self._get_fallback_results(tag_id, keyword)
+            fallback_data = self._get_fallback_results(tag_id, keyword)
+            return fallback_data, f"FAILED: {str(e)}"
     
     def _get_fallback_results(self, tag_id: int, keyword: str) -> List[Dict[str, Any]]:
         """폴백 쿼리 - 더 단순한 방식으로 데이터 수집"""

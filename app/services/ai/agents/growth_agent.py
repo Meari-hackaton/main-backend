@@ -42,24 +42,32 @@ class GrowthAgent:
     def _create_info_prompt(self) -> ChatPromptTemplate:
         """정보 콘텐츠 생성 프롬프트"""
         
-        system_message = """당신은 한국 청년(19-34세)의 고민을 이해하고 실질적인 도움을 주는 상담사입니다.
-사용자의 상황에 맞는 실용적이고 구체적인 정보를 제공하세요.
+        system_message = """당신은 한국 청년(19-34세)의 고민을 이해하고 실질적인 도움을 주는 전문 상담사입니다.
+청년들의 취업 스트레스, 직장 내 번아웃, 우울감, 사회적 고립감, 관계 스트레스 등에 대한 실용적인 정보를 제공하세요.
 
 ## 응답 형식 (JSON):
 {{
-    "title": "번아웃 극복을 위한 일상 회복법",  
-    "content": "번아웃은 장기간의 과도한 스트레스로 인한 신체적, 정서적 소진 상태입니다. 회복을 위해서는 먼저 충분한 휴식이 필요합니다. 업무 시간과 개인 시간의 경계를 명확히 하고, 퇴근 후에는 업무 연락을 차단하세요. 주말에는 좋아하는 취미 활동이나 가벼운 운동으로 에너지를 충전하는 것이 중요합니다. 필요하다면 전문 상담사의 도움을 받는 것도 좋은 방법입니다.",
-    "summary": "번아웃 회복을 위한 일과 삶의 균형 찾기",
-    "search_query": "직장인 번아웃 극복 방법",
-    "key_points": ["업무와 개인 시간 분리하기", "규칙적인 휴식과 운동", "전문가 상담 고려"]
+    "title": "취업 스트레스 관리법",  
+    "content": "취업 준비 과정에서 느끼는 스트레스는 자연스러운 반응입니다. 중요한 것은 이를 건강하게 관리하는 방법입니다. 첫째, 매일 달성 가능한 작은 목표를 설정하세요. '오늘은 자소서 한 문단 완성'처럼 구체적이고 실현 가능한 목표가 좋습니다. 둘째, 규칙적인 운동과 충분한 수면을 유지하세요. 신체 건강이 정신 건강의 기반입니다. 셋째, 같은 상황의 동료들과 소통하며 정보와 감정을 공유하세요. 혼자가 아님을 아는 것만으로도 큰 힘이 됩니다.",
+    "summary": "취업 스트레스를 건강하게 관리하는 실천 방법",
+    "search_query": "청년 취업 스트레스 극복",
+    "key_points": ["작은 목표 설정하기", "규칙적인 생활 습관", "동료와의 소통"]
 }}
 
+## 주제 예시:
+- 취업/이직 준비, 서류 작성법, 면접 대비
+- 직장 내 스트레스 관리, 번아웃 예방
+- 우울감 극복, 불안 관리, 수면 개선
+- 대인관계 개선, 사회적 연결감 회복
+- 경제적 자립, 주거 문제 해결
+
 ## 작성 원칙:
-1. 한국 청년이 실제로 겪는 문제(취업, 직장, 관계, 건강 등)에 대한 실질적 조언
+1. 한국 청년이 실제로 겪는 문제에 대한 실질적 조언
 2. 바로 실천 가능한 구체적인 방법 제시
-3. 관련 정책이나 지원 서비스 정보 포함 가능
-4. 위로보다는 해결책 중심
-5. 200-300자 내외의 명확한 설명"""
+3. 관련 정책이나 지원 서비스 정보 포함
+4. 희망적이면서도 현실적인 톤
+5. 200-300자 내외의 명확한 설명
+6. 절대 '페르소나', '캐릭터', 'RPG', '게임' 등의 개념 사용 금지"""
         
         human_template = """사용자 상황: {user_context}
 
@@ -73,23 +81,31 @@ class GrowthAgent:
     def _create_exp_prompt(self) -> ChatPromptTemplate:
         """경험 리츄얼 생성 프롬프트"""
         
-        system_message = """사용자 상황에 맞는 10분 이내 리츄얼을 제안하세요.
+        system_message = """당신은 한국 청년의 심리 회복을 돕는 전문 상담사입니다.
+청년의 취업 스트레스, 번아웃, 우울감, 관계 고민 등에 도움이 되는 실천 가능한 리츄얼을 제안하세요.
 
 ## 응답 형식 (JSON):
 {{
-    "ritual_name": "리츄얼 이름",
-    "description": "리츄얼 설명 (50-100자)",
-    "steps": ["단계 1", "단계 2", "단계 3"],
-    "duration": "소요 시간",
-    "immediate_effect": "즉각적 효과",
-    "long_term_effect": "장기적 효과"
+    "ritual_name": "감사 일기 쓰기",
+    "description": "오늘 하루 감사한 3가지를 기록하며 긍정적인 마음을 회복하는 시간",
+    "steps": ["조용한 공간에서 노트나 메모앱 준비", "오늘 있었던 작은 감사한 일 3가지 떠올리기", "각각에 대해 2-3문장으로 구체적으로 기록", "작성한 내용을 천천히 다시 읽으며 마음에 새기기"],
+    "duration": "10분",
+    "immediate_effect": "부정적 사고의 전환, 마음의 안정",
+    "long_term_effect": "긍정적 사고 습관 형성, 정서적 회복력 향상"
 }}
+
+## 리츄얼 예시:
+- 호흡 명상, 감사 일기, 짧은 산책
+- 스트레칭, 좋아하는 음악 듣기
+- 친구에게 안부 메시지 보내기
+- 작은 목표 설정하고 달성하기
 
 ## 원칙:
 1. 10분 이내로 실천 가능
-2. 특별한 도구나 장소 불필요
-3. 즉각적 효과가 있는 활동
-4. 구체적이고 따라하기 쉬운 단계"""
+2. 특별한 도구나 장소 불필요  
+3. 청년의 실제 고민 해결에 도움
+4. 구체적이고 따라하기 쉬운 단계
+5. 절대 '페르소나', '캐릭터', 'RPG' 등의 개념 사용 금지"""
         
         human_template = """사용자 상황: {user_context}
 
@@ -307,16 +323,98 @@ class GrowthAgent:
         user_context: str,
         previous_policy_ids: List[str] = None
     ) -> GrowthContent:
-        """3종 콘텐츠 병렬 생성"""
+        """3종 콘텐츠 한번의 LLM 호출로 생성"""
         
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            info_future = executor.submit(self.generate_information, user_context)
-            exp_future = executor.submit(self.generate_experience, user_context)
-            support_future = executor.submit(self.generate_support, user_context, previous_policy_ids)
+        # 정책은 벡터 검색으로
+        support = self.generate_support(user_context, previous_policy_ids)
+        
+        # 정보와 경험은 하나의 프롬프트로 통합 생성
+        combined_prompt = ChatPromptTemplate.from_messages([
+            ("system", """당신은 한국 청년의 고민을 이해하고 도움을 주는 상담사입니다.
+사용자 상황에 맞는 정보와 리츄얼을 JSON으로 제공하세요.
+
+응답 형식:
+{{
+    "information": {{
+        "title": "제목",
+        "content": "실용적인 정보 (200-300자)",
+        "summary": "한줄 요약",
+        "search_query": "검색 쿼리"
+    }},
+    "experience": {{
+        "ritual_name": "리츄얼 이름",
+        "description": "설명 (50-100자)",
+        "steps": ["단계1", "단계2", "단계3"],
+        "duration": "5-10분",
+        "immediate_effect": "즉각 효과",
+        "long_term_effect": "장기 효과"
+    }}
+}}"""),
+            ("human", "사용자 상황: {user_context}\n\n위 상황에 맞는 정보와 리츄얼을 JSON으로 작성하세요:")
+        ])
+        
+        try:
+            chain = combined_prompt | self.llm
+            response = chain.invoke({"user_context": user_context})
             
-            information = info_future.result()
-            experience = exp_future.result()
-            support = support_future.result()
+            import json
+            content = response.content.strip()
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            
+            result = json.loads(content)
+            
+            # URL 매핑
+            url_map = {
+                "취업": "https://www.work.go.kr/seekWantedMain.do",
+                "번아웃": "https://www.blutouch.net",
+                "우울": "https://www.ncmh.go.kr",
+                "정책": "https://www.youthcenter.go.kr",
+                "상담": "https://www.129.go.kr",
+                "건강": "https://www.mohw.go.kr"
+            }
+            
+            selected_url = "https://www.youthcenter.go.kr"
+            for keyword, url in url_map.items():
+                if keyword in user_context or keyword in result.get("information", {}).get("title", ""):
+                    selected_url = url
+                    break
+            
+            information = {
+                "type": "information",
+                "title": result["information"]["title"],
+                "content": result["information"]["content"],
+                "summary": result["information"]["summary"],
+                "search_query": result["information"]["search_query"],
+                "sources": [{
+                    "title": "관련 정보 더보기",
+                    "url": selected_url,
+                    "snippet": result["information"]["summary"]
+                }]
+            }
+            
+            experience = {
+                "type": "experience",
+                "title": "오늘의 리츄얼",
+                "ritual_name": result["experience"]["ritual_name"],
+                "description": result["experience"]["description"],
+                "steps": result["experience"]["steps"],
+                "duration": result["experience"]["duration"],
+                "immediate_effect": result["experience"]["immediate_effect"],
+                "long_term_effect": result["experience"]["long_term_effect"]
+            }
+            
+        except Exception as e:
+            print(f"통합 생성 실패, 개별 생성으로 폴백: {e}")
+            # 폴백: 병렬 실행
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                info_future = executor.submit(self.generate_information, user_context)
+                exp_future = executor.submit(self.generate_experience, user_context)
+                
+                information = info_future.result()
+                experience = exp_future.result()
         
         return GrowthContent(
             information=information,

@@ -159,10 +159,8 @@ class MeariWorkflow:
         
         routing_type = state.get("routing", {}).get("type", "")
         
-        if routing_type == "initial_session":
-            return "growth"  # Initial session 후 growth content도 생성
-        else:
-            return "synthesizer"
+        # Initial session에서는 growth 생성하지 않고 바로 synthesizer로
+        return "synthesizer"
     
     def _parallel_empathy_cypher(self, state: MeariState) -> MeariState:
         """Empathy와 Cypher를 병렬로 실행"""
@@ -201,6 +199,9 @@ class MeariWorkflow:
             # 디버깅: 병합 후 상태 확인
             print(f"\n=== 병렬 실행 후 상태 병합 ===")
             print(f"graph_results 개수: {len(state.get('graph_results', []))}")
+            print(f"cypher_query 존재: {'cypher_query' in state}")
+            print(f"cypher_query 길이: {len(state.get('cypher_query', ''))}")
+            print(f"graph_explanation: {state.get('graph_explanation', 'EMPTY')}")
             if state.get('graph_results'):
                 print(f"첫 번째 graph_result: {state['graph_results'][0]}")
             

@@ -192,6 +192,14 @@ class PersonaAgent:
         
         routing_type = state.get("routing", {}).get("type", "")
         
+        # 중요: cypher_query와 graph_explanation 보존
+        cypher_query = state.get("cypher_query", "")
+        graph_explanation = state.get("graph_explanation", "")
+        
+        # graph_explanation이 비어있으면 다시 생성
+        if not graph_explanation and state.get("graph_results"):
+            graph_explanation = f"Graph RAG: {len(state.get('graph_results', []))}개 인사이트 발견"
+        
         if routing_type == "initial_session":
             # 초기 페르소나 생성
             empathy_card = state.get("empathy_card", {}).get("content", "")
@@ -231,4 +239,14 @@ class PersonaAgent:
                 }
         
         state["persona_completed"] = True
+        
+        # 중요: cypher_query와 graph_explanation 복원
+        state["cypher_query"] = cypher_query
+        state["graph_explanation"] = graph_explanation
+        
+        # 디버깅: state 확인
+        print(f"\n=== PersonaAgent 완료 시 state ===")
+        print(f"cypher_query 존재: {'cypher_query' in state}")
+        print(f"graph_explanation: {state.get('graph_explanation', 'NOT FOUND')}")
+        
         return state

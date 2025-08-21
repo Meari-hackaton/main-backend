@@ -337,6 +337,14 @@ JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나
         graph_results = state.get("graph_results", [])
         user_context = state.get("user_context", "")
         
+        # 중요: cypher_query와 graph_explanation 보존 (LangGraph 상태 병합 이슈 해결)
+        cypher_query = state.get("cypher_query", "")
+        graph_explanation = state.get("graph_explanation", "")
+        
+        # graph_explanation이 비어있으면 graph_results에서 생성
+        if not graph_explanation and graph_results:
+            graph_explanation = f"Graph RAG: {len(graph_results)}개 인사이트 발견"
+        
         # 디버깅: graph_results 확인
         print(f"\n=== ReflectionAgent: graph_results 받음 ===")
         print(f"graph_results 개수: {len(graph_results)}")
@@ -398,5 +406,14 @@ JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나
             ]
         }
         state["reflection_completed"] = True
+        
+        # 중요: cypher_query와 graph_explanation 보존
+        state["cypher_query"] = cypher_query
+        state["graph_explanation"] = graph_explanation
+        
+        # 디버깅: state 확인
+        print(f"\n=== ReflectionAgent 완료 시 state ===")
+        print(f"cypher_query 존재: {'cypher_query' in state}")
+        print(f"graph_explanation: {state.get('graph_explanation', 'NOT FOUND')}")
         
         return state

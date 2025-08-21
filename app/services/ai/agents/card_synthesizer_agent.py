@@ -16,6 +16,10 @@ class CardSynthesizerAgent:
             print(f"empathy_card 내용: {state['empathy_card'].get('content', '')[:50]}...")
             print(f"empathy_card cards: {len(state['empathy_card'].get('cards', []))}")
         
+        # graph_explanation을 다시 확인하고 없으면 복원
+        if not state.get("graph_explanation") and state.get("graph_results"):
+            state["graph_explanation"] = f"Graph RAG: {len(state.get('graph_results', []))}개 인사이트 발견"
+        
         routing_type = state.get("routing", {}).get("type", "")
         
         if routing_type == "initial_session":
@@ -29,6 +33,11 @@ class CardSynthesizerAgent:
     
     def _create_initial_session_cards(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """초기 세션 카드 구조화"""
+        
+        # 디버깅: 받은 state 확인
+        print(f"\n=== CardSynthesizer: state 확인 ===")
+        print(f"cypher_query 존재: {'cypher_query' in state}")
+        print(f"graph_explanation: {state.get('graph_explanation', 'NOT FOUND')}")
         
         # 1. 공감 카드 구조화
         empathy_card = self._structure_empathy_card(state.get("empathy_card", {}))
@@ -69,7 +78,9 @@ class CardSynthesizerAgent:
                 "reflection": reflection_card
             },
             "persona": persona,
-            "next_action": "growth_content"
+            "next_action": "growth_content",
+            "cypher_query": state.get("cypher_query", ""),  # Cypher 쿼리 포함
+            "graph_explanation": state.get("graph_explanation", "")  # 그래프 설명 포함
         }
         
         return state
