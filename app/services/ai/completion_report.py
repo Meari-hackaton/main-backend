@@ -144,7 +144,7 @@ class CompletionReportGenerator:
         
         types = {}
         for r in daily_rituals:
-            ritual_type = r.type or "meditation"
+            ritual_type = r.ritual_type or "meditation"
             types[ritual_type] = types.get(ritual_type, 0) + 1
         
         return max(types, key=types.get)
