@@ -274,11 +274,15 @@ async def create_growth_contents(
         # 워크플로우 실행
         workflow = MeariWorkflow()
         
+        # 세션에서 태그 정보 가져오기
+        tag_ids = session.selected_tag_ids if session else []
+        
         workflow_request = {
             "request_type": "growth_content",
             "endpoint": "/api/growth-contents",
             "context": request.context,
             "session_id": str(request.session_id),
+            "tag_ids": tag_ids,  # 태그 정보 추가
             "persona_summary": persona_summary,
             "previous_policy_ids": all_previous_policy_ids,  # 병합된 리스트 사용
             "user_id": str(user_id) if user_id else None
@@ -332,10 +336,9 @@ async def create_growth_contents(
         
         # Experience 카드를 DailyRitual로도 저장 (대시보드 연동)
         from app.models.daily import DailyRitual
-        from datetime import date, timedelta
         
         experience_card = workflow_result.get("cards", {}).get("experience")
-        if experience_card:
+        if experience_card and request.context == "initial":  # initial 세션일 때만
             today = date.today()
             
             # 오늘의 DailyRitual이 없으면 생성
@@ -347,18 +350,28 @@ async def create_growth_contents(
             existing_ritual = result.scalar_one_or_none()
             
             if not existing_ritual:
+                # 리츄얼 정보 추출
+                ritual_name = experience_card.get("ritual_name", "오늘의 리츄얼")
+                description = experience_card.get("description", "")
+                
+                # steps를 description에 포함
+                steps = experience_card.get("steps", [])
+                if steps:
+                    steps_text = "\n".join([f"{i+1}. {step}" for i, step in enumerate(steps)])
+                    description = f"{description}\n\n실천 방법:\n{steps_text}"
+                
                 daily_ritual = DailyRitual(
                     user_id=user_id,
                     date=today,
-                    ritual_title=experience_card.get("ritual_name", "오늘의 리츄얼"),
-                    ritual_description=experience_card.get("description", ""),
-                    ritual_type="growth_experience",  # 성장 콘텐츠에서 온 것 표시
-                    duration_minutes=10  # 기본값
+                    ritual_title=ritual_name,
+                    ritual_description=description,
+                    ritual_type="growth_experience",
+                    duration_minutes=10
                 )
                 
-                # duration 파싱 시도
+                # duration 파싱
                 duration_str = experience_card.get("duration", "10분")
-                if "분" in duration_str:
+                if isinstance(duration_str, str) and "분" in duration_str:
                     try:
                         minutes = int(duration_str.replace("분", "").strip())
                         daily_ritual.duration_minutes = minutes
@@ -366,6 +379,7 @@ async def create_growth_contents(
                         pass
                 
                 db.add(daily_ritual)
+                print(f"리츄얼 자동 생성: {ritual_name}")
         
         await db.commit()
         
