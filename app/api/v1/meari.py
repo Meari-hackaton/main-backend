@@ -30,38 +30,6 @@ router = APIRouter(
     tags=["meari"]
 )
 
-# 테스트용 엔드포인트 (인증 없이)
-@router.post("/test/sessions")
-async def test_meari_session(
-    request: MeariSessionRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """테스트용 초기 세션 (인증 없음)"""
-    try:
-        workflow = MeariWorkflow()
-        
-        workflow_request = {
-            "request_type": "initial_session",
-            "endpoint": "/test/sessions",
-            "tag_ids": [request.selected_tag_id],
-            "user_context": request.user_context or f"태그 {request.selected_tag_id}번 관련 고민"
-        }
-        
-        import asyncio
-        loop = asyncio.get_event_loop()
-        workflow_result = await loop.run_in_executor(
-            None,
-            workflow.process_request,
-            workflow_request
-        )
-        
-        return workflow_result
-        
-    except Exception as e:
-        print(f"테스트 API 에러: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post(
     "/sessions",
     response_model=MeariSessionResponse,
