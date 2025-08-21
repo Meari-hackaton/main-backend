@@ -148,6 +148,25 @@ async def create_meari_session(
             )
             db.add(persona_history)
         
+        # 마음나무 초기화 또는 업데이트
+        from app.models.checkin import HeartTree
+        stmt = select(HeartTree).where(HeartTree.user_id == user_id)
+        result = await db.execute(stmt)
+        heart_tree = result.scalar_one_or_none()
+        
+        if heart_tree:
+            # 기존 마음나무가 있으면 레벨 증가
+            heart_tree.growth_level += 1
+            heart_tree.last_grew_at = datetime.utcnow()
+        else:
+            # 없으면 새로 생성
+            heart_tree = HeartTree(
+                user_id=user_id,
+                growth_level=1,
+                last_grew_at=datetime.utcnow()
+            )
+            db.add(heart_tree)
+        
         await db.commit()
         
         return MeariSessionResponse(
