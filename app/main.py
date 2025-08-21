@@ -78,9 +78,12 @@ def google_login():
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
     
+    # Railway 배포 URL 사용
+    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": "http://localhost:8000/auth/google/callback",
+        "redirect_uri": f"{backend_url}/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline"
@@ -102,13 +105,16 @@ async def google_callback(
     
     async with httpx.AsyncClient() as client:
         # 1) 구글 인증 토큰 요청
+        # Railway 배포 URL 사용
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        
         token_resp = await client.post(
             GOOGLE_TOKEN_ENDPOINT,
             data={
                 "code": code,
                 "client_id": GOOGLE_CLIENT_ID,
                 "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": "http://localhost:8000/auth/google/callback",
+                "redirect_uri": f"{backend_url}/auth/google/callback",
                 "grant_type": "authorization_code",
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
