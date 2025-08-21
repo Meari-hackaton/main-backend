@@ -74,16 +74,22 @@ async def create_user(db: AsyncSession, provider: str, provider_id: str, email: 
 # Google OAuth 로그인
 # --------------------------------------------------------------
 @app.get("/auth/google/login")
-def google_login():
+def google_login(request: Request):
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
     
-    # Railway 배포 URL 사용
-    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    # Railway에서 실제 요청 URL 사용 (동적으로 감지)
+    if os.getenv("RAILWAY_ENVIRONMENT"):
+        # Railway 환경에서는 실제 요청 URL 사용
+        redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
+    else:
+        # 로컬 환경
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        redirect_uri = f"{backend_url}/auth/google/callback"
     
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": f"{backend_url}/auth/google/callback",
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline"
@@ -96,6 +102,7 @@ def google_login():
 # --------------------------------------------------------------
 @app.get("/auth/google/callback")
 async def google_callback(
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
     code: str = Query(...)
@@ -105,8 +112,12 @@ async def google_callback(
     
     async with httpx.AsyncClient() as client:
         # 1) 구글 인증 토큰 요청
-        # Railway 배포 URL 사용
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        # Railway에서 실제 요청 URL 사용
+        if os.getenv("RAILWAY_ENVIRONMENT"):
+            redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
+        else:
+            backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+            redirect_uri = f"{backend_url}/auth/google/callback"
         
         token_resp = await client.post(
             GOOGLE_TOKEN_ENDPOINT,
@@ -114,7 +125,7 @@ async def google_callback(
                 "code": code,
                 "client_id": GOOGLE_CLIENT_ID,
                 "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": f"{backend_url}/auth/google/callback",
+                "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
