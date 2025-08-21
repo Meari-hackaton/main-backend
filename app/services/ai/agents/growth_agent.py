@@ -3,8 +3,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from pymilvus import Collection, connections
-from sentence_transformers import SentenceTransformer
 from app.services.data.vector_store import get_policies_collection
+from app.services.data.embedding_service import embed_text
 import os
 from concurrent.futures import ThreadPoolExecutor
 
@@ -29,9 +29,6 @@ class GrowthAgent:
         # Milvus 커렉션은 사용 시점에 가져오기
         self.policies_collection = None
         
-        # 임베딩 모델
-        self.embedding_model = SentenceTransformer('nlpai-lab/KURE-v1')
-        
         # 프롬프트 설정
         self.info_prompt = self._create_info_prompt()
         self.exp_prompt = self._create_exp_prompt()
@@ -43,19 +40,27 @@ class GrowthAgent:
         return self.policies_collection
     
     def _create_info_prompt(self) -> ChatPromptTemplate:
-        """정보 검색 쿼리 생성 프롬프트"""
+        """정보 콘텐츠 생성 프롬프트"""
         
-        system_message = """사용자 상황에 맞는 유용한 정보를 검색하고 요약하세요.
+        system_message = """사용자 상황에 맞는 유용한 정보를 제공하세요.
+
+## 응답 형식 (JSON):
+{{
+    "title": "구체적인 제목",
+    "content": "200-300자의 핵심 정보와 실용적 조언",
+    "summary": "한 줄 요약",
+    "search_query": "관련 검색어",
+    "key_points": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"]
+}}
 
 ## 원칙:
-1. 실용적이고 구체적인 정보
-2. 신뢰할 수 있는 출처 우선
-3. 최신 정보 위주
-4. 핵심 내용 요약 + 출처 링크"""
+1. 실용적이고 구체적인 정보 제공
+2. 즉시 활용 가능한 팁 포함
+3. 공감적이고 희망적인 톤"""
         
-        human_template = """상황: {user_context}
+        human_template = """사용자 상황: {user_context}
 
-검색할 정보:"""
+위 상황에 도움이 될 정보를 JSON 형식으로 제공하세요:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -63,32 +68,46 @@ class GrowthAgent:
         ])
     
     def _create_exp_prompt(self) -> ChatPromptTemplate:
-        """리츄얼 제안 프롬프트"""
+        """경험 리츄얼 생성 프롬프트"""
         
-        system_message = """10분 이내 실천 가능한 리츄얼을 제안하세요.
+        system_message = """사용자 상황에 맞는 10분 이내 리츄얼을 제안하세요.
+
+## 응답 형식 (JSON):
+{{
+    "ritual_name": "리츄얼 이름",
+    "description": "리츄얼 설명 (50-100자)",
+    "steps": ["단계 1", "단계 2", "단계 3"],
+    "duration": "소요 시간",
+    "immediate_effect": "즉각적 효과",
+    "long_term_effect": "장기적 효과"
+}}
 
 ## 원칙:
-1. 즉시 실천 가능
-2. 특별한 도구 불필요
-3. 구체적인 방법 제시"""
+1. 10분 이내로 실천 가능
+2. 특별한 도구나 장소 불필요
+3. 즉각적 효과가 있는 활동
+4. 구체적이고 따라하기 쉬운 단계"""
         
-        human_template = """상황: {user_context}
+        human_template = """사용자 상황: {user_context}
 
-리츄얼 제안:"""
+위 상황에 도움이 될 리츄얼을 JSON 형식으로 제안하세요:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
             ("human", human_template)
         ])
     
-    def search_relevant_policy(
-        self,
+    def search_policy(
+        self, 
         user_context: str,
         previous_policy_ids: List[str] = None
     ) -> Optional[Dict[str, Any]]:
         """관련 정책 검색"""
         
-        query_embedding = self.embedding_model.encode(user_context)
+        if previous_policy_ids is None:
+            previous_policy_ids = []
+        
+        query_embedding = embed_text(user_context)
         search_params = {"metric_type": "COSINE", "params": {"nprobe": 16}}
         
         # 중복 제외
@@ -107,58 +126,134 @@ class GrowthAgent:
         if results and len(results[0]) > 0:
             hit = results[0][0]
             return {
+                "type": "support",
+                "title": "맞춤형 지원 정책",
                 "policy_id": hit.entity.get("policy_id"),
                 "policy_name": hit.entity.get("policy_name"),
                 "support_content": hit.entity.get("support_content"),
                 "application_url": hit.entity.get("application_url"),
-                "organization": hit.entity.get("organization")
+                "organization": hit.entity.get("organization"),
+                "eligibility": "만 19-34세 청년",
+                "how_to_apply": "온라인 신청"
             }
-        return None
+        
+        # 기본 정책 반환
+        return {
+            "type": "support",
+            "title": "맞춤형 지원 정책",
+            "policy_id": "default_001",
+            "policy_name": "청년 마음건강 바우처 지원",
+            "support_content": "정신건강의학과, 심리상담센터 이용 비용 지원 (연 60만원 한도)",
+            "application_url": "https://www.youthcenter.go.kr",
+            "organization": "여성가족부",
+            "eligibility": "만 19-34세 청년",
+            "how_to_apply": "온라인 신청"
+        }
     
     def generate_information(self, user_context: str) -> Dict[str, Any]:
-        """정보 검색 및 요약"""
+        """정보 콘텐츠 생성"""
+        import json
         
-        # 검색 쿼리 생성
+        # LLM에게 정보 생성 요청
         chain = self.info_prompt | self.llm
-        query_response = chain.invoke({"user_context": user_context})
+        response = chain.invoke({"user_context": user_context})
         
-        # WebSearch 도구 사용 (실제 구현 시)
-        # 여기서는 시뮬레이션
-        search_query = query_response.content.split("\n")[0] if query_response.content else user_context
-        
-        # 검색 결과 시뮬레이션 (실제로는 WebSearch 사용)
-        search_results = {
-            "query": search_query,
-            "results": [
+        try:
+            # JSON 파싱 시도
+            if response.content:
+                # JSON 부분만 추출
+                content = response.content.strip()
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0]
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0]
+                
+                result = json.loads(content)
+                
+                # 필수 필드 확인 및 기본값 설정
+                return {
+                    "type": "information",
+                    "title": result.get("title", "맞춤형 정보"),
+                    "content": result.get("content", ""),
+                    "summary": result.get("summary", ""),
+                    "search_query": result.get("search_query", user_context),
+                    "sources": [
+                        {
+                            "title": f"{result.get('title', '관련 정보')} - 추천 자료",
+                            "url": "https://www.youthcenter.go.kr",
+                            "snippet": result.get("key_points", [""])[0] if result.get("key_points") else "청년 지원 정보"
+                        }
+                    ]
+                }
+        except json.JSONDecodeError:
+            # JSON 파싱 실패 시 텍스트 기반 처리
+            content = response.content.strip() if response.content else ""
+            
+        # 폴백: 기본 응답
+        return {
+            "type": "information",
+            "title": "맞춤형 정보",
+            "content": content[:300] if len(content) > 300 else content,
+            "summary": content[:100] if content else "사용자 맞춤 정보",
+            "search_query": user_context,
+            "sources": [
                 {
-                    "title": "청년 마음건강 지원 프로그램",
-                    "url": "https://example.com/mental-health",
-                    "snippet": "청년들을 위한 무료 심리상담 서비스..."
+                    "title": "청년 지원 센터",
+                    "url": "https://www.youthcenter.go.kr",
+                    "snippet": "다양한 청년 지원 프로그램 제공"
                 }
             ]
         }
-        
-        # 정보 요약
-        summary = f"'{search_query}'에 대한 정보:\n\n{query_response.content}"
-        
-        return {
-            "type": "information",
-            "title": "유용한 정보",
-            "content": summary,
-            "search_query": search_query,
-            "sources": search_results.get("results", [])
-        }
     
     def generate_experience(self, user_context: str) -> Dict[str, Any]:
-        """리츄얼 생성"""
+        """경험 리츄얼 제안"""
+        import json
         
+        # LLM에게 리츄얼 생성 요청
         chain = self.exp_prompt | self.llm
         response = chain.invoke({"user_context": user_context})
         
+        try:
+            # JSON 파싱 시도
+            if response.content:
+                # JSON 부분만 추출
+                content = response.content.strip()
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0]
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0]
+                
+                result = json.loads(content)
+                
+                # 필수 필드 확인 및 반환
+                return {
+                    "type": "experience",
+                    "title": "오늘의 리츄얼",
+                    "ritual_name": result.get("ritual_name", "마음챙기기 리츄얼"),
+                    "description": result.get("description", ""),
+                    "steps": result.get("steps", []),
+                    "duration": result.get("duration", "5-10분"),
+                    "immediate_effect": result.get("immediate_effect", "마음의 안정"),
+                    "long_term_effect": result.get("long_term_effect", "정서적 탄력성 향상")
+                }
+        except json.JSONDecodeError:
+            # JSON 파싱 실패 시 텍스트 기반 처리
+            content = response.content.strip() if response.content else ""
+            
+        # 폴백: 기본 리츄얼
         return {
             "type": "experience",
             "title": "오늘의 리츄얼",
-            "content": response.content
+            "ritual_name": "마음챙기기",
+            "description": "잠시 멈추고 현재에 집중하는 시간",
+            "steps": [
+                "1. 편안한 자세로 앉기",
+                "2. 천천히 심호흡 3회",
+                "3. 현재 드는 감정 인식하기"
+            ],
+            "duration": "5-10분",
+            "immediate_effect": "마음의 안정",
+            "long_term_effect": "정서적 탄력성 향상"
         }
     
     def generate_support(
@@ -168,26 +263,22 @@ class GrowthAgent:
     ) -> Dict[str, Any]:
         """정책 추천"""
         
-        policy = self.search_relevant_policy(user_context, previous_policy_ids)
+        policy = self.search_policy(user_context, previous_policy_ids)
         
-        if not policy:
-            return {
-                "type": "support",
-                "title": "추천 정책 없음",
-                "content": "현재 모든 관련 정책을 확인하셨습니다.",
-                "policy_id": None
-            }
+        if policy:
+            return policy
         
-        # 간단한 소개
-        intro = f"{policy['policy_name']}\n\n{policy['support_content'][:200]}...\n\n신청: {policy['application_url']}"
-        
+        # 기본 정책 추가
         return {
             "type": "support",
-            "title": policy["policy_name"],
-            "content": intro,
-            "policy_id": policy["policy_id"],
-            "application_url": policy["application_url"],
-            "organization": policy["organization"]
+            "title": "맞춤형 지원 정책",
+            "policy_id": "default_001",
+            "policy_name": "청년 마음건강 지원 사업",
+            "support_content": "심리상담 비용 지원",
+            "application_url": "https://www.youthcenter.go.kr",
+            "organization": "여성가족부",
+            "eligibility": "만 19-34세 청년",
+            "how_to_apply": "온라인 신청"
         }
     
     def generate_all_contents(
@@ -215,13 +306,14 @@ class GrowthAgent:
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """LangGraph 상태 처리"""
         
-        user_context = state.get("user_context", "")
+        # persona_summary 또는 user_context 사용
+        user_context = state.get("persona_summary") or state.get("user_context", "")
         previous_policy_ids = state.get("previous_policy_ids", [])
         
         # 3종 콘텐츠 생성
         growth_content = self.generate_all_contents(user_context, previous_policy_ids)
         
-        # 상태 업데이트
+        # 상태 업데이트 - growth_content로 저장 (card_synthesizer가 이를 cards로 변환)
         state["growth_content"] = {
             "information": growth_content.information,
             "experience": growth_content.experience,

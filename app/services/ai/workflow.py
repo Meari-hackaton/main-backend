@@ -186,12 +186,12 @@ class MeariWorkflow:
             # 상태 병합 - 각 에이전트의 모든 업데이트를 병합
             # Empathy 에이전트의 업데이트 병합
             for key, value in empathy_result.items():
-                if value is not None and key in state:
+                if value is not None:
                     state[key] = value
             
             # Cypher 에이전트의 업데이트 병합
             for key, value in cypher_result.items():
-                if value is not None and key in state:
+                if value is not None and key != 'empathy_card':  # empathy_card는 덮어쓰지 않음
                     state[key] = value
             
             # 완료 플래그 설정

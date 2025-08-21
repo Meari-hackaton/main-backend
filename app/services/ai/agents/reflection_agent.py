@@ -66,47 +66,39 @@ class ReflectionAgent:
     def _create_prompt(self) -> ChatPromptTemplate:
         """성찰 카드 생성 프롬프트"""
         
-        system_message = """당신은 청년들의 문제를 사회적 맥락에서 이해하는 상담사입니다.
-주어진 데이터 각각에 대해 독립적인 인사이트 카드를 작성하세요.
+        system_message = """당신은 청년들의 문제를 사회적 맥락에서 깊이 이해하는 전문 상담사입니다.
+주어진 뉴스 그래프 분석 결과를 바탕으로 사용자에게 통찰력 있는 성찰 카드를 작성합니다.
+
+## 중요한 역할:
+- 뉴스 데이터: 객관적 사실과 통계를 제공하는 근거
+- 성찰 카드: 사용자가 자신의 상황을 더 넓은 관점에서 이해하도록 돕는 통찰
 
 ## 작성 원칙:
-1. 각 카드는 200-300자로 작성
-2. 카드별로 다른 관점 제시
-3. 구체적인 통계나 사실 포함
-4. 희망적이지만 현실적인 톤
+1. 각 카드는 50-80자로 매우 간결하게 (2-3문장 이내)
+2. 핵심 통계나 사실 1개만 포함
+3. 사용자의 개인적 어려움을 사회적 현상으로 확장
+4. 비판보다는 이해와 공감의 톤 유지
+5. 문장이 중간에 끊기지 않도록 완전한 문장으로 작성
 
-## 카드 유형:
-1. "뉴스가 말해주는 진짜 이유" - 문제의 구조적 원인
-2. "왜 이런 일이 생기는 걸까요?" - 사회적 맥락과 배경
-3. "희망적인 변화들도 있어요" - 해결 노력과 지원
+## 카드 유형 (각각 다른 관점):
+1. "뉴스가 말해주는 진짜 이유" - 문제의 근본 원인과 구조적 요인
+2. "왜 이런 일이 생기는 걸까요?" - 사회적 맥락과 영향받는 사람들
+3. "희망적인 변화들도 있어요" - 해결 노력과 지원 체계
 
 ## 응답 형식:
-반드시 다음과 같은 JSON 배열 형식으로만 응답하세요:
-[
-  {{
-    "title": "카드 제목",
-    "content": "카드 내용 (200-300자)",
-    "key_points": ["포인트1", "포인트2", "포인트3"]
-  }},
-  {{
-    "title": "카드 제목",
-    "content": "카드 내용 (200-300자)",
-    "key_points": ["포인트1", "포인트2", "포인트3"]
-  }},
-  {{
-    "title": "카드 제목",
-    "content": "카드 내용 (200-300자)",
-    "key_points": ["포인트1", "포인트2", "포인트3"]
-  }}
-]"""
-        
-        human_template = """다음 3개의 그래프 분석 결과로 각각 다른 인사이트 카드를 작성하세요:
+JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나 추가 텍스트를 포함하지 마세요.
 
+[{{"title": "뉴스가 말해주는 진짜 이유", "content": "구조적 원인 (50-80자)", "key_points": ["핵심원인", "통계"]}}, {{"title": "왜 이런 일이 생기는 걸까요?", "content": "사회적 맥락 (50-80자)", "key_points": ["공통경험", "함께극복"]}}, {{"title": "희망적인 변화들도 있어요", "content": "해결 노력 (50-80자)", "key_points": ["정부지원", "기관노력"]}}]"""
+        
+        human_template = """뉴스 그래프 분석 결과:
 {graph_results}
 
 사용자 상황: {user_context}
 
-위의 JSON 형식으로만 응답하세요. 다른 설명은 추가하지 마세요:"""
+위 데이터를 바탕으로 3개의 성찰 카드를 작성하세요.
+각 카드는 위 3개 결과 중 하나에 대응하며, 각각 다른 관점에서 접근해야 합니다.
+
+위의 JSON 형식으로만 응답하세요:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -241,11 +233,9 @@ class ReflectionAgent:
             problem = result.get('problem', '직장 내 스트레스')
             contexts = result.get('contexts', ['경쟁적 직장 문화', '과도한 업무량'])
             
-            content1 = f"많은 직장인들이 {problem} 문제로 고통받고 있습니다. "
-            content1 += f"전문가들은 {contexts[0]}이(가) 주요 원인이라고 지적합니다. "
-            if len(contexts) > 1:
-                content1 += f"또한 {contexts[1]} 역시 중요한 요인으로 작용하고 있습니다. "
-            content1 += "이는 개인의 문제가 아닌 우리 사회가 함께 해결해야 할 구조적 문제입니다."
+            content1 = f"직장인 70%가 {problem} 경험. "
+            if contexts:
+                content1 += f"{contexts[0]}이 주요 원인입니다."
             
             # 뉴스 정보 조회
             news_id = result.get("news_id")
@@ -275,12 +265,8 @@ class ReflectionAgent:
             affected = result.get('affected_groups', ['청년 직장인', 'MZ세대'])
             problem = result.get('problem', '번아웃')
             
-            content2 = f"당신만 겪는 일이 아닙니다. {affected[0]}을(를) 비롯해 "
-            if len(affected) > 1:
-                content2 += f"{affected[1]} 등 "
-            content2 += f"많은 사람들이 비슷한 {problem} 문제를 경험하고 있습니다. "
-            content2 += "최근 조사에 따르면 직장인 10명 중 7명이 업무 스트레스를 호소하고 있습니다. "
-            content2 += "우리는 함께 이 문제를 극복해 나갈 수 있습니다."
+            content2 = f"{affected[0] if affected else '청년들'}이 비슷한 어려움을 겪고 있어요. "
+            content2 += "혼자가 아닙니다."
             
             # 뉴스 정보 조회
             news_id = result.get("news_id")
@@ -310,14 +296,11 @@ class ReflectionAgent:
             initiatives = result.get('initiatives', ['근로자지원프로그램', '정신건강 상담'])
             stakeholders = result.get('stakeholders', ['고용노동부', '보건복지부'])
             
-            content3 = f"다행히 사회적 관심이 높아지면서 {initiatives[0]} 같은 "
-            content3 += "실질적인 지원이 확대되고 있습니다. "
+            content3 = f"{initiatives[0] if initiatives else '지원 프로그램'}이 확대 중. "
             if stakeholders:
-                content3 += f"{stakeholders[0]}을(를) 비롯한 여러 기관에서 "
-            content3 += "청년들의 정신건강 개선을 위해 노력하고 있습니다. "
-            if len(initiatives) > 1:
-                content3 += f"{initiatives[1]} 서비스도 이용 가능합니다. "
-            content3 += "도움이 필요할 때 주저하지 말고 지원을 받으세요."
+                content3 += f"{stakeholders[0]}에서 지원합니다."
+            else:
+                content3 += "도움을 받을 수 있어요."
             
             # 뉴스 정보 조회
             news_id = result.get("news_id")

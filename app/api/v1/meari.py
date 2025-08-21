@@ -4,6 +4,7 @@
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from datetime import datetime
 import uuid
 
@@ -21,6 +22,7 @@ from app.schemas.meari import (
 )
 from app.models.card import MeariSession, GeneratedCard
 from app.models.checkin import AIPersonaHistory, Ritual, HeartTree
+from app.models.history import UserContentHistory
 from app.services.ai.workflow import MeariWorkflow
 
 router = APIRouter(
@@ -153,7 +155,6 @@ async def create_growth_contents(
     
     try:
         # 세션 확인
-        from sqlalchemy import select
         stmt = select(MeariSession).where(MeariSession.id == request.session_id)
         result = await db.execute(stmt)
         session = result.scalar_one_or_none()
@@ -233,13 +234,59 @@ async def create_growth_contents(
                 policy_ids = card_data["source_ids"].get("policies", [])
                 for policy_id in policy_ids:
                     if policy_id:
-                        # 중복 체크 후 저장 (UniqueConstraint가 있으므로 try-except 처리)
-                        history = UserContentHistory(
-                            user_id=user_id,
-                            content_type="policy",
-                            content_id=policy_id
+                        # 중복 체크 - 이미 존재하는지 확인
+                        stmt = select(UserContentHistory).where(
+                            UserContentHistory.user_id == user_id,
+                            UserContentHistory.content_type == "policy",
+                            UserContentHistory.content_id == policy_id
                         )
-                        db.add(history)
+                        result = await db.execute(stmt)
+                        existing = result.scalar_one_or_none()
+                        
+                        if not existing:
+                            history = UserContentHistory(
+                                user_id=user_id,
+                                content_type="policy",
+                                content_id=policy_id
+                            )
+                            db.add(history)
+        
+        # Experience 카드를 DailyRitual로도 저장 (대시보드 연동)
+        from app.models.daily import DailyRitual
+        from datetime import date, timedelta
+        
+        experience_card = workflow_result.get("cards", {}).get("experience")
+        if experience_card:
+            today = date.today()
+            
+            # 오늘의 DailyRitual이 없으면 생성
+            stmt = select(DailyRitual).where(
+                DailyRitual.user_id == user_id,
+                DailyRitual.date == today
+            )
+            result = await db.execute(stmt)
+            existing_ritual = result.scalar_one_or_none()
+            
+            if not existing_ritual:
+                daily_ritual = DailyRitual(
+                    user_id=user_id,
+                    date=today,
+                    ritual_title=experience_card.get("ritual_name", "오늘의 리츄얼"),
+                    ritual_description=experience_card.get("description", ""),
+                    ritual_type="growth_experience",  # 성장 콘텐츠에서 온 것 표시
+                    duration_minutes=10  # 기본값
+                )
+                
+                # duration 파싱 시도
+                duration_str = experience_card.get("duration", "10분")
+                if "분" in duration_str:
+                    try:
+                        minutes = int(duration_str.replace("분", "").strip())
+                        daily_ritual.duration_minutes = minutes
+                    except:
+                        pass
+                
+                db.add(daily_ritual)
         
         await db.commit()
         
@@ -279,7 +326,6 @@ async def create_ritual(
         user_id = current_user.id
         
         # 기존 리츄얼 개수 확인
-        from sqlalchemy import select, func
         stmt = select(func.count()).select_from(Ritual).where(Ritual.user_id == user_id)
         result = await db.execute(stmt)
         ritual_count = result.scalar() or 0
@@ -288,15 +334,86 @@ async def create_ritual(
         new_sequence = ritual_count + 1
         
         # 리츄얼 저장
+        today = datetime.utcnow().date()
         ritual = Ritual(
             user_id=user_id,
             ritual_sequence=new_sequence,
             diary_entry=request.diary_entry,
             selected_mood=request.selected_mood,
             ritual_completed=True,
-            checkin_date=datetime.utcnow().date()
+            checkin_date=today
         )
         db.add(ritual)
+        await db.flush()
+        
+        # DailyRitual에도 저장 (대시보드 연동)
+        from app.models.daily import DailyRitual, UserStreak
+        
+        # 오늘의 DailyRitual 확인 또는 생성
+        stmt = select(DailyRitual).where(
+            DailyRitual.user_id == user_id,
+            DailyRitual.date == today
+        )
+        result = await db.execute(stmt)
+        daily_ritual = result.scalar_one_or_none()
+        
+        if not daily_ritual:
+            daily_ritual = DailyRitual(
+                user_id=user_id,
+                date=today,
+                ritual_title="오늘의 리츄얼",
+                ritual_description=f"기분: {request.selected_mood}",
+                ritual_type="diary",
+                duration_minutes=10,
+                is_completed=True,
+                completed_at=datetime.utcnow(),
+                user_note=request.diary_entry,
+                user_mood=request.selected_mood
+            )
+            db.add(daily_ritual)
+        else:
+            daily_ritual.is_completed = True
+            daily_ritual.completed_at = datetime.utcnow()
+            daily_ritual.user_note = request.diary_entry
+            daily_ritual.user_mood = request.selected_mood
+        
+        # UserStreak 업데이트
+        stmt = select(UserStreak).where(UserStreak.user_id == user_id)
+        result = await db.execute(stmt)
+        streak = result.scalar_one_or_none()
+        
+        if not streak:
+            streak = UserStreak(
+                user_id=user_id,
+                current_streak=1,
+                longest_streak=1,
+                total_days_active=1,
+                total_rituals_completed=1
+            )
+            db.add(streak)
+        else:
+            # 어제 리츄얼 확인
+            yesterday = today - timedelta(days=1)
+            stmt = select(DailyRitual).where(
+                DailyRitual.user_id == user_id,
+                DailyRitual.date == yesterday,
+                DailyRitual.is_completed == True
+            )
+            result = await db.execute(stmt)
+            yesterday_ritual = result.scalar_one_or_none()
+            
+            if yesterday_ritual:
+                # 연속 기록 유지
+                streak.current_streak += 1
+                if streak.current_streak > streak.longest_streak:
+                    streak.longest_streak = streak.current_streak
+            else:
+                # 연속 기록 초기화
+                streak.current_streak = 1
+            
+            streak.total_days_active += 1
+            streak.total_rituals_completed += 1
+        
         await db.flush()
         
         # 마음나무 상태 업데이트 또는 생성

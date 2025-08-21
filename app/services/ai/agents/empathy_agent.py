@@ -3,11 +3,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from pymilvus import Collection, connections
-from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from app.models.news import News
 from app.services.data.vector_store import get_quotes_collection
+from app.services.data.embedding_service import embed_text
 import numpy as np
 import os
 
@@ -47,9 +47,6 @@ class EmpathyAgent:
         # Milvus 컬렉션은 사용 시점에 가져오기
         self.quotes_collection = None
         
-        # 임베딩 모델 로드
-        self.embedding_model = SentenceTransformer('nlpai-lab/KURE-v1')
-        
         # 프롬프트 설정
         self.prompt = self._create_prompt()
         
@@ -71,27 +68,34 @@ class EmpathyAgent:
         """공감 카드 생성 프롬프트"""
         
         system_message = """당신은 청년들의 마음을 깊이 이해하는 공감 상담사입니다.
-제공된 인용문들을 바탕으로 3개의 공감 카드를 작성하세요.
+사용자가 겪고 있는 어려움에 대해 진심어린 공감 메시지를 작성하세요.
+
+## 중요한 역할 구분:
+- 인용문: 비슷한 상황을 겪는 다른 사람들의 목소리 (참고용)
+- 공감 메시지: 사용자의 현재 상황과 감정에 대한 당신의 공감
 
 ## 작성 원칙:
-1. 각 인용문마다 하나의 카드로 작성 (200-300자)
-2. 서로 다른 관점으로 공감 전달
-3. 인용문의 감정을 깊이 공감하며 반영
+1. 사용자의 상황과 감정을 중심으로 공감 (인용문은 "당신만 그런 게 아니에요"를 보여주는 증거)
+2. 각 카드마다 다른 관점으로 공감 전달 (150-200자로 간결하게)
+3. 사용자가 느낄 감정을 구체적으로 언급하며 공감
 4. 비판이나 조언 없이 순수한 공감과 위로만 전달
-5. 희망적이지만 현실적인 톤 유지
+5. "~하시겠어요", "~일 것 같아요" 등 사용자의 감정을 조심스럽게 추측하는 표현 사용
+6. 중요: 반드시 완전한 문장으로 끝내기 (문장이 중간에 끊기지 않도록)
 
 ## 응답 형식:
 JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나 추가 텍스트를 포함하지 마세요.
 
-[{{"title": "같은 마음이 느껴져요", "content": "카드 내용", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}, {{"title": "왜 그렇게 느껴지는지 알 것 같아요", "content": "카드 내용", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}, {{"title": "당신만이 그런 것은 아니에요", "content": "카드 내용", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}]"""
+[{{"title": "같은 마음이 느껴져요", "content": "사용자의 상황에 대한 공감 메시지", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}, {{"title": "왜 그렇게 느껴지는지 알 것 같아요", "content": "사용자의 감정에 대한 공감 메시지", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}, {{"title": "당신만이 그런 것은 아니에요", "content": "인용문을 참고한 위로 메시지", "emotion_keywords": ["키워드1", "키워드2", "키워드3"]}}]"""
         
-        human_template = """다음 3개의 인용문로 각각 다른 공감 카드를 작성하세요:
+        human_template = """사용자 상황: {user_context}
 
+다음은 비슷한 어려움을 겪는 다른 사람들의 목소리입니다:
 {quotes}
 
-사용자 상황: {user_context}
+위 인용문들을 참고하여, 사용자의 상황에 대해 3개의 공감 카드를 작성하세요.
+사용자가 현재 느끼고 있을 감정과 어려움에 초점을 맞춰주세요.
 
-위의 JSON 형식으로만 응답하세요. 다른 설명은 추가하지 마세요:"""
+위의 JSON 형식으로만 응답하세요:"""
         
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -107,7 +111,7 @@ JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나
         """유사한 인용문 검색"""
         
         # 사용자 입력 임베딩
-        user_embedding = self.embedding_model.encode(user_context)
+        user_embedding = embed_text(user_context)
         
         # 검색 파라미터
         search_params = {"metric_type": "COSINE", "params": {"nprobe": 16}}
@@ -153,10 +157,12 @@ JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나
         with self.SessionLocal() as session:
             for news_id in news_ids:
                 if news_id:
+                    # 먼저 News 테이블에서 찾기
                     result = session.execute(
                         select(News).where(News.news_id == news_id)
                     )
                     news = result.scalar_one_or_none()
+                    
                     if news:
                         news_info[news_id] = {
                             "title": news.title,
@@ -164,6 +170,23 @@ JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나
                             "published_at": news.published_at.strftime("%Y년 %m월 %d일") if news.published_at else "",
                             "link_url": news.link_url
                         }
+                    else:
+                        # News 테이블에 없으면 NewsQuote를 통해 가져오기
+                        from app.models.news import NewsQuote
+                        quote_result = session.execute(
+                            select(NewsQuote).where(NewsQuote.news_id == news_id).limit(1)
+                        )
+                        quote = quote_result.scalar_one_or_none()
+                        
+                        if quote and quote.news_id:
+                            # NewsQuote에는 있지만 News에는 없는 경우
+                            # 최소한의 정보라도 제공 (news_id 노출하지 않음)
+                            news_info[news_id] = {
+                                "title": "관련 뉴스",
+                                "provider": None,
+                                "published_at": "",
+                                "link_url": None
+                            }
         return news_info
     
     def generate_empathy_cards(
@@ -173,8 +196,37 @@ JSON 코드 블록 없이 순수한 JSON 배열만 응답하세요. 설명이나
     ) -> List[QuoteCard]:
         """공감 카드 3개 생성"""
         
+        # 뉴스 정보가 있는 인용문 우선 선택
+        news_ids = [q.get('news_id') for q in quotes if q.get('news_id')]
+        news_info = self._get_news_info_sync(news_ids)
+        
+        # 뉴스 링크가 있는 인용문 우선 정렬
+        quotes_with_news = []
+        quotes_without_news = []
+        
+        for quote in quotes:
+            news_id = quote.get('news_id')
+            if news_id and news_id in news_info and news_info[news_id].get('link_url'):
+                quotes_with_news.append(quote)
+            else:
+                quotes_without_news.append(quote)
+        
+        # 뉴스가 있는 것 우선, 없는 것은 뒤에
+        sorted_quotes = quotes_with_news + quotes_without_news
+        
+        # 중복 제거 (news_id 기준)
+        seen_news_ids = set()
+        unique_quotes = []
+        for quote in sorted_quotes:
+            news_id = quote.get('news_id')
+            if news_id and news_id in seen_news_ids:
+                continue  # 이미 본 news_id는 건너뜀
+            if news_id:
+                seen_news_ids.add(news_id)
+            unique_quotes.append(quote)
+        
         # 상위 3개 인용문 선택
-        top_quotes = quotes[:3]
+        top_quotes = unique_quotes[:3]
         
         # 각 인용문에 대한 포맷팅
         quotes_text = "\n\n".join([

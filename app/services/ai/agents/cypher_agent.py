@@ -299,29 +299,75 @@ LIMIT 5"""
         
         keyword = tag_keywords.get(tag_id, '청년')
         
-        # 단순하고 빠른 쿼리 - 3개 Problem만 가져오기
+        # 더 포괄적인 쿼리 - 다양한 관점 수집
         query = f"""
-        MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p:Problem)
-        WHERE p.name CONTAINS '{keyword}'
-        WITH n, p LIMIT 3
+        // 1. 문제와 원인 분석
+        MATCH (n1:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p1:Problem)
+        WHERE p1.name CONTAINS '{keyword}' OR p1.name CONTAINS '스트레스' OR p1.name CONTAINS '불안'
+        WITH n1, p1 ORDER BY n1.published_at DESC LIMIT 1
+        OPTIONAL MATCH (p1)<-[:CAUSES|AFFECTS]-(c1:Context)
+        WITH n1, p1, collect(DISTINCT c1.name)[..3] as contexts1
         
-        OPTIONAL MATCH (p)<-[:CAUSES]-(c:Context)
-        WITH n, p, collect(DISTINCT c.name)[..3] as contexts
+        // 2. 사회적 맥락과 영향받는 집단
+        MATCH (n2:News {{tag_id: {tag_id}}})-[:CONTAINS]->(p2:Problem)
+        WHERE p2.name CONTAINS '{keyword}' OR p2.name CONTAINS '청년'
+        WITH n1, p1, contexts1, n2, p2 ORDER BY n2.published_at DESC LIMIT 1
+        OPTIONAL MATCH (p2)-[:AFFECTS]->(co:Cohort)
+        OPTIONAL MATCH (ctx:Context)-[:AFFECTS|CAUSES]->(p2)
+        WITH n1, p1, contexts1, n2, p2, 
+             collect(DISTINCT co.name)[..2] as cohorts2,
+             collect(DISTINCT ctx.name)[..2] as contexts2
         
-        OPTIONAL MATCH (i:Initiative)-[:ADDRESSES]->(p)
-        WITH n, p, contexts, collect(DISTINCT i.name)[..3] as initiatives
+        // 3. 해결 방안과 지원
+        MATCH (n3:News {{tag_id: {tag_id}}})-[:CONTAINS]->(i:Initiative)
+        WITH n1, p1, contexts1, n2, p2, cohorts2, contexts2, n3, i ORDER BY n3.published_at DESC LIMIT 1
+        OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i)
+        OPTIONAL MATCH (i)-[:ADDRESSES]->(p3:Problem)
+        WITH n1, p1, contexts1, n2, p2, cohorts2, contexts2, n3, i,
+             collect(DISTINCT s.name)[..2] as stakeholders3,
+             collect(DISTINCT p3.name)[..1] as problems3
         
-        OPTIONAL MATCH (s:Stakeholder)-[:INVOLVES]->(i:Initiative)-[:ADDRESSES]->(p)
-        
-        RETURN 
-            n.news_id as news_id,
-            n.title as news_title,
-            n.published_at as news_date,
-            p.name as problem,
-            contexts,
-            initiatives,
-            collect(DISTINCT s.name)[..2] as stakeholders,
-            [] as affected_groups
+        RETURN [
+            {{
+                news_id: n1.news_id,
+                news_title: n1.title,
+                news_date: n1.published_at,
+                problem: p1.name,
+                contexts: contexts1,
+                initiatives: [],
+                stakeholders: [],
+                affected_groups: []
+            }},
+            {{
+                news_id: n2.news_id,
+                news_title: n2.title,
+                news_date: n2.published_at,
+                problem: p2.name,
+                contexts: contexts2,
+                initiatives: [],
+                stakeholders: [],
+                affected_groups: cohorts2
+            }},
+            {{
+                news_id: n3.news_id,
+                news_title: n3.title,
+                news_date: n3.published_at,
+                problem: CASE WHEN size(problems3) > 0 THEN problems3[0] ELSE i.name END,
+                contexts: [],
+                initiatives: [i.name],
+                stakeholders: stakeholders3,
+                affected_groups: []
+            }}
+        ] as results
+        UNWIND results as result
+        RETURN result.news_id as news_id,
+               result.news_title as news_title,
+               result.news_date as news_date,
+               result.problem as problem,
+               result.contexts as contexts,
+               result.initiatives as initiatives,
+               result.stakeholders as stakeholders,
+               result.affected_groups as affected_groups
         """
         
         try:
@@ -329,10 +375,69 @@ LIMIT 5"""
                 result = session.run(query)
                 data = [dict(record) for record in result]
                 print(f"최적화된 쿼리 결과: {len(data)}개")
+                
+                # 결과가 3개 미만이면 폴백 쿼리 실행
+                if len(data) < 3:
+                    return self._get_fallback_results(tag_id, keyword)
+                    
                 return data[:3]
         except Exception as e:
             print(f"쿼리 실행 실패: {e}")
-            return []
+            return self._get_fallback_results(tag_id, keyword)
+    
+    def _get_fallback_results(self, tag_id: int, keyword: str) -> List[Dict[str, Any]]:
+        """폴백 쿼리 - 더 단순한 방식으로 데이터 수집"""
+        try:
+            # 단순한 쿼리로 최소한의 데이터라도 가져오기
+            query = f"""
+            MATCH (n:News {{tag_id: {tag_id}}})-[:CONTAINS]->(node)
+            WHERE labels(node)[0] IN ['Problem', 'Context', 'Initiative', 'Stakeholder', 'Cohort']
+            WITH n, collect(DISTINCT {{
+                type: labels(node)[0],
+                name: node.name
+            }}) as nodes
+            RETURN n.news_id as news_id,
+                   n.title as news_title,
+                   n.published_at as news_date,
+                   nodes
+            ORDER BY n.published_at DESC
+            LIMIT 3
+            """
+            
+            with self.driver.session() as session:
+                result = session.run(query)
+                raw_data = [dict(record) for record in result]
+                
+                # 데이터 구조화
+                structured = []
+                for record in raw_data:
+                    nodes = record.get('nodes', [])
+                    
+                    problems = [n['name'] for n in nodes if n['type'] == 'Problem']
+                    contexts = [n['name'] for n in nodes if n['type'] == 'Context']
+                    initiatives = [n['name'] for n in nodes if n['type'] == 'Initiative']
+                    stakeholders = [n['name'] for n in nodes if n['type'] == 'Stakeholder']
+                    cohorts = [n['name'] for n in nodes if n['type'] == 'Cohort']
+                    
+                    structured.append({
+                        'news_id': record.get('news_id'),
+                        'news_title': record.get('news_title'),
+                        'news_date': str(record.get('news_date')) if record.get('news_date') else None,
+                        'problem': problems[0] if problems else f"{keyword} 관련 문제",
+                        'contexts': contexts[:3],
+                        'initiatives': initiatives[:3],
+                        'stakeholders': stakeholders[:2],
+                        'affected_groups': cohorts[:2]
+                    })
+                
+                if structured:
+                    return structured
+                    
+        except Exception as e:
+            print(f"폴백 쿼리도 실패: {e}")
+        
+        # 최종 폴백: 모의 데이터
+        return self._get_mock_results(tag_id)
     
     def _get_mock_results(self, tag_id: int) -> List[Dict[str, Any]]:
         """Neo4j 연결 실패 시 모의 데이터 반환"""

@@ -217,8 +217,9 @@ class CardSynthesizerAgent:
         return {
             "type": "information",
             "title": raw_data.get("title", "유용한 정보"),
+            "content": raw_data.get("content", ""),
+            "summary": raw_data.get("summary", ""),
             "search_query": raw_data.get("search_query", ""),
-            "summary": raw_data.get("content", ""),
             "sources": raw_data.get("sources", [])
         }
     
@@ -227,20 +228,26 @@ class CardSynthesizerAgent:
         return {
             "type": "experience",
             "title": raw_data.get("title", "오늘의 리츄얼"),
-            "activity": raw_data.get("content", ""),
-            "duration": "10분 이내",
-            "difficulty": "쉬움"
+            "ritual_name": raw_data.get("ritual_name", "마음챙기기"),
+            "description": raw_data.get("description", ""),
+            "steps": raw_data.get("steps", []),
+            "duration": raw_data.get("duration", "10분 이내"),
+            "immediate_effect": raw_data.get("immediate_effect", ""),
+            "long_term_effect": raw_data.get("long_term_effect", "")
         }
     
     def _structure_support_card(self, raw_data: Dict) -> Dict[str, Any]:
         """지원 카드 구조화"""
         return {
             "type": "support",
-            "title": raw_data.get("title", ""),
-            "policy_name": raw_data.get("title", ""),
-            "description": raw_data.get("content", ""),
+            "title": raw_data.get("title", "맞춤형 지원 정책"),
+            "policy_id": raw_data.get("policy_id", ""),
+            "policy_name": raw_data.get("policy_name", ""),
+            "support_content": raw_data.get("support_content", ""),
             "organization": raw_data.get("organization", ""),
-            "application_url": raw_data.get("application_url", "")
+            "application_url": raw_data.get("application_url", ""),
+            "eligibility": raw_data.get("eligibility", ""),
+            "how_to_apply": raw_data.get("how_to_apply", "")
         }
     
     def _structure_persona(self, raw_data: Dict) -> Dict[str, Any]:
