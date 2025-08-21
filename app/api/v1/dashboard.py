@@ -132,11 +132,11 @@ async def get_dashboard_test(
             monthly_completed=int(monthly_completed)
         ),
         today_ritual=TodayRitual(
-            id=today_ritual.id if today_ritual else None,
-            title=today_ritual.ritual_title if today_ritual else "오늘의 리츄얼 받기",
-            is_completed=today_ritual.is_completed if today_ritual else False,
-            type=today_ritual.ritual_type if today_ritual else "growth_experience"
-        ),
+            id=today_ritual.id,
+            title=today_ritual.ritual_title,
+            is_completed=today_ritual.is_completed,
+            type=today_ritual.ritual_type
+        ) if today_ritual else None,
         notifications=notification_objects
     )
 
@@ -313,11 +313,11 @@ async def get_dashboard(
             monthly_completed=int(monthly_completed)
         ),
         today_ritual=TodayRitual(
-            id=today_ritual.id if today_ritual else None,
-            title=today_ritual.ritual_title if today_ritual else "오늘의 리츄얼 받기",
-            is_completed=today_ritual.is_completed if today_ritual else False,
-            type=today_ritual.ritual_type if today_ritual else "growth_experience"
-        ),
+            id=today_ritual.id,
+            title=today_ritual.ritual_title,
+            is_completed=today_ritual.is_completed,
+            type=today_ritual.ritual_type
+        ) if today_ritual else None,
         notifications=notification_objects
     )
 

@@ -7,8 +7,8 @@ router = APIRouter()
 
 def generate_midi_bytes():
     midi = MIDIFile(2)
-    tempo = 75
-    volume = 50
+    tempo = 50
+    volume = 30
     left_track = 0
     right_track = 1
     
