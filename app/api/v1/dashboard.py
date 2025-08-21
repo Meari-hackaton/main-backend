@@ -53,18 +53,18 @@ async def get_dashboard_test(
     tree_level = heart_tree.growth_level if heart_tree else 1  # 기본값 1
     tree_stage = _get_tree_stage(tree_level)
     
-    # 2. 연속 기록 조회 또는 생성
+    # 2. 연속 기록 조회 (생성하지 않음 - 읽기 전용)
     stmt = select(UserStreak).where(UserStreak.user_id == user_id)
     result = await db.execute(stmt)
     streak = result.scalar_one_or_none()
     
     if not streak:
         # 테스트용 기본값
-        streak = UserStreak(
-            user_id=user_id,
-            current_streak=1,
-            longest_streak=1,
-            total_days_active=1,
+        from types import SimpleNamespace
+        streak = SimpleNamespace(
+            current_streak=0,
+            longest_streak=0,
+            total_days_active=0,
             total_rituals_completed=0,
             total_rituals_created=0
         )
@@ -85,11 +85,21 @@ async def get_dashboard_test(
         and_(
             DailyRitual.user_id == user_id,
             DailyRitual.date >= first_day,
+            DailyRitual.date <= today,
             DailyRitual.is_completed == True
         )
     )
     result = await db.execute(stmt)
     monthly_completed = result.scalar() or 0
+    
+    # 4-1. 전체 리츄얼 카운트 (메아리 세션 포함)
+    from app.models.checkin import Ritual
+    stmt = select(func.count(Ritual.id)).where(
+        Ritual.user_id == user_id,
+        Ritual.ritual_completed == True
+    )
+    result = await db.execute(stmt)
+    total_ritual_count = result.scalar() or 0
     
     # 5. 알림 메시지 생성
     notifications = []
@@ -117,7 +127,7 @@ async def get_dashboard_test(
         ),
         statistics=Statistics(
             continuous_days=streak.current_streak or 0,
-            total_rituals=streak.total_rituals_completed or 0,
+            total_rituals=max(streak.total_rituals_completed or 0, total_ritual_count),
             practiced_rituals=getattr(streak, 'total_rituals_created', 0),
             monthly_completed=int(monthly_completed)
         ),
@@ -154,22 +164,22 @@ async def get_dashboard(
     tree_level = heart_tree.growth_level if heart_tree else 0
     tree_stage = _get_tree_stage(tree_level)
     
-    # 2. 연속 기록 조회 또는 생성
+    # 2. 연속 기록 조회 (생성하지 않음 - 읽기 전용)
     stmt = select(UserStreak).where(UserStreak.user_id == user_id)
     result = await db.execute(stmt)
     streak = result.scalar_one_or_none()
     
+    # streak이 없으면 기본값 사용
     if not streak:
-        streak = UserStreak(
-            user_id=user_id,
+        # 대시보드는 읽기 전용이므로 생성하지 않음
+        from types import SimpleNamespace
+        streak = SimpleNamespace(
             current_streak=0,
             longest_streak=0,
             total_days_active=0,
             total_rituals_completed=0,
             total_rituals_created=0
         )
-        db.add(streak)
-        await db.flush()
     
     # 3. 오늘의 리츄얼
     stmt = select(DailyRitual).where(
@@ -187,14 +197,26 @@ async def get_dashboard(
         and_(
             DailyRitual.user_id == user_id,
             DailyRitual.date >= first_day,
+            DailyRitual.date <= today,
             DailyRitual.is_completed == True
         )
     )
     result = await db.execute(stmt)
     monthly_completed = result.scalar() or 0
     
+    # 4-1. 전체 리츄얼 카운트 (메아리 세션 포함)
+    from app.models.checkin import Ritual
+    stmt = select(func.count(Ritual.id)).where(
+        Ritual.user_id == user_id,
+        Ritual.ritual_completed == True
+    )
+    result = await db.execute(stmt)
+    total_ritual_count = result.scalar() or 0
+    
     # 5. 알림 메시지 생성
     notifications = []
+    
+    # 리츄얼 관련 알림
     if not today_ritual:
         notifications.append({
             "type": "ritual",
@@ -208,11 +230,65 @@ async def get_dashboard(
             "icon": "clock"
         })
     
-    if streak.current_streak > 0 and streak.current_streak % 7 == 0:
+    # 연속 기록 달성 알림
+    if streak.current_streak > 0:
+        # 7일 달성
+        if streak.current_streak == 7:
+            notifications.append({
+                "type": "achievement",
+                "message": "🎉 1주일 연속 달성! 멋져요!",
+                "icon": "trophy"
+            })
+        # 14일 달성
+        elif streak.current_streak == 14:
+            notifications.append({
+                "type": "achievement",
+                "message": "🌟 2주 연속 달성! 대단해요!",
+                "icon": "trophy"
+            })
+        # 21일 달성
+        elif streak.current_streak == 21:
+            notifications.append({
+                "type": "achievement",
+                "message": "🏆 3주 연속 달성! 습관이 되고 있어요!",
+                "icon": "trophy"
+            })
+        # 28일 달성
+        elif streak.current_streak == 28:
+            notifications.append({
+                "type": "achievement",
+                "message": "👑 28일 완주! 마음나무가 만개했어요!",
+                "icon": "trophy"
+            })
+    
+    # 연속 기록 위기 알림
+    if streak.current_streak > 0 and not today_ritual:
+        notifications.append({
+            "type": "info",
+            "message": f"연속 {streak.current_streak}일째! 오늘도 이어가세요",
+            "icon": "fire"
+        })
+    
+    # 마음나무 단계 변화 알림
+    if tree_level in [7, 14, 21]:
+        stage_messages = {
+            7: "마음나무가 새싹이 되었어요! 🌱",
+            14: "마음나무가 성장 단계에 들어섰어요! 🌿",
+            21: "마음나무가 개화를 시작했어요! 🌸"
+        }
         notifications.append({
             "type": "achievement",
-            "message": f"{streak.current_streak}일 연속 달성!",
-            "icon": "trophy"
+            "message": stage_messages.get(tree_level, ""),
+            "icon": "tree"
+        })
+    
+    # 월간 완료율 알림
+    if monthly_completed > 0 and today.day == 1:
+        last_month = today.month - 1 if today.month > 1 else 12
+        notifications.append({
+            "type": "info",
+            "message": f"지난달 {monthly_completed}일 완료했어요!",
+            "icon": "calendar"
         })
     
     from app.schemas.dashboard import TreeStatus, Statistics, TodayRitual, Notification
@@ -232,7 +308,7 @@ async def get_dashboard(
         ),
         statistics=Statistics(
             continuous_days=streak.current_streak,
-            total_rituals=streak.total_rituals_completed,
+            total_rituals=max(streak.total_rituals_completed, total_ritual_count),
             practiced_rituals=getattr(streak, 'total_rituals_created', 0),
             monthly_completed=int(monthly_completed)
         ),
@@ -311,14 +387,18 @@ async def get_calendar(
     completed_dates = [d["date"] for d in days if d["is_completed"]]
     current_streak = _calculate_current_streak(completed_dates)
     
+    # 완료 일수 계산
+    completed_count = len([d for d in days if d["is_completed"]])
+    days_passed = min((date.today() - first_day).days + 1, len(days))  # 이번 달 중 지난 일수
+    
     return CalendarResponse(
         year=year,
         month=month,
         days=days,
         summary={
-            "total_days": len(days),
-            "completed_days": len([d for d in days if d["is_completed"]]),
-            "completion_rate": len([d for d in days if d["is_completed"]]) / len(days) * 100 if days else 0,
+            "total_days": days_passed,  # 전체 날짜가 아닌 지난 날짜 기준
+            "completed_days": completed_count,
+            "completion_rate": completed_count / days_passed * 100 if days_passed > 0 else 0,
             "current_streak": current_streak
         }
     )

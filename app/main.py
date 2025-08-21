@@ -159,7 +159,22 @@ async def google_callback(
 
     # 5) 프론트엔드로 리다이렉트 (쿠키 포함)
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    response = RedirectResponse(f"{frontend_url}/dashboard?login=success")
+    # 신규 회원이면 steps로, 기존 회원이면 dashboard로
+    from datetime import timezone
+    now = datetime.now(timezone.utc) if user.created_at and user.created_at.tzinfo else datetime.utcnow()
+    
+    if user.created_at:
+        # created_at이 timezone-aware인 경우 처리
+        created_at = user.created_at if user.created_at.tzinfo else user.created_at.replace(tzinfo=timezone.utc)
+        if (now - created_at).total_seconds() < 60:
+            # 방금 생성된 사용자 (1분 이내)
+            response = RedirectResponse(f"{frontend_url}/steps?login=success")
+        else:
+            # 기존 사용자
+            response = RedirectResponse(f"{frontend_url}/dashboard?login=success")
+    else:
+        # created_at이 없는 경우 dashboard로
+        response = RedirectResponse(f"{frontend_url}/dashboard?login=success")
     
     # 6) 리다이렉트 응답에 쿠키 설정
     response.set_cookie(

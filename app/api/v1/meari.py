@@ -338,7 +338,9 @@ async def create_growth_contents(
         from app.models.daily import DailyRitual
         
         experience_card = workflow_result.get("cards", {}).get("experience")
-        if experience_card and request.context == "initial":  # initial 세션일 때만
+        # initial: 최초 메아리 세션 후 자동으로 리츄얼 생성
+        # ritual: 별도로 리츄얼 받기를 선택했을 때 리츄얼 생성
+        if experience_card and request.context in ["initial", "ritual"]:
             today = date.today()
             
             # 오늘의 DailyRitual이 없으면 생성
@@ -379,7 +381,12 @@ async def create_growth_contents(
                         pass
                 
                 db.add(daily_ritual)
-                print(f"리츄얼 자동 생성: {ritual_name}")
+                
+                # context에 따른 메시지 분기
+                if request.context == "initial":
+                    print(f"[initial] 메아리 세션 완료 - 리츄얼 자동 생성: {ritual_name}")
+                else:
+                    print(f"[ritual] 오늘의 리츄얼 받기 - 리츄얼 생성: {ritual_name}")
         
         await db.commit()
         
