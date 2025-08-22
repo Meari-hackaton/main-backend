@@ -2,8 +2,8 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-dotenv==1.0.0
-pydantic==2.4.2
-pydantic-settings==2.0.3
+pydantic==2.7.4
+pydantic-settings==2.3.4
 
 # Database
 sqlalchemy==2.0.23
