@@ -1,0 +1,87 @@
+databases:
+  - name: meari-db
+    databaseName: meari_db
+    user: meari_user
+    plan: free
+
+services:
+  - type: web
+    name: meari-backend
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      # Database (자동 연결)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meari-db
+          property: connectionString
+      
+      # Google OAuth
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://meari-backend.onrender.com/auth/google/callback
+      
+      # Kakao OAuth
+      - key: KAKAO_CLIENT_ID
+        sync: false
+      - key: KAKAO_CLIENT_SECRET
+        sync: false
+      - key: KAKAO_REDIRECT_URI
+        value: https://meari-backend.onrender.com/auth/kakao/callback
+      
+      # Frontend URLs
+      - key: FRONTEND_URL
+        value: https://frontend-weld-pi-52.vercel.app
+      - key: DOMAIN
+        value: https://mearihearo.com
+      
+      # Security
+      - key: SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: "none"
+      - key: SESSION_COOKIE_NAME
+        value: meari_session
+      - key: SESSION_EXPIRES_DAYS
+        value: "7"
+      
+      # AI APIs
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY2
+        sync: false
+      - key: GEMINI_API_KEY3
+        sync: false
+      - key: BIGKINDS_ACCESS_KEY
+        sync: false
+      - key: YOUTH_POLICY_API_KEY
+        sync: false
+      
+      # Vector & Graph DB
+      - key: MILVUS_URI
+        sync: false
+      - key: MILVUS_TOKEN
+        sync: false
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        value: neo4j
+      - key: NEO4J_PASSWORD
+        sync: false
+      
+      # Embedding Model
+      - key: EMBEDDING_MODEL_NAME
+        value: nlpai-lab/KURE-v1
+      
+      # Application
+      - key: APP_NAME
+        value: "Meari Backend"
+      - key: DEBUG
+        value: "false"

@@ -19,8 +19,10 @@ venv.bak/
 
 # Environment
 .env
+.env.*
 .env.local
 .env.*.local
+*.env
 
 # Database
 *.db
@@ -39,6 +41,10 @@ claude*
 ../CLAUDE.md
 *.claude
 .claude/
+
+# Deployment configs with secrets
+render_env_setup.md
+RENDER_DEPLOYMENT.md
 
 # Test coverage
 htmlcov/

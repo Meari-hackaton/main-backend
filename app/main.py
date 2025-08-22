@@ -25,7 +25,7 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://meari-pied.vercel.app", "https://meari-seven.vercel.app", "http://localhost:3000", "*"],  # Vercel 및 개발용
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
