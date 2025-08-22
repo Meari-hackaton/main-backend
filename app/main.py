@@ -25,7 +25,7 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://localhost:8001", "*"],  # React 개발 서버 및 개발용
+    allow_origins=["https://meari-pied.vercel.app", "https://meari-seven.vercel.app", "http://localhost:3000", "*"],  # Vercel 및 개발용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,22 +74,16 @@ async def create_user(db: AsyncSession, provider: str, provider_id: str, email: 
 # Google OAuth 로그인
 # --------------------------------------------------------------
 @app.get("/auth/google/login")
-def google_login(request: Request):
+def google_login(request: Request = None):
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
     
-    # Railway에서 실제 요청 URL 사용 (동적으로 감지)
-    if os.getenv("RAILWAY_ENVIRONMENT"):
-        # Railway 환경에서는 실제 요청 URL 사용
-        redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
-    else:
-        # 로컬 환경
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
-        redirect_uri = f"{backend_url}/auth/google/callback"
+    # 고정 URL 사용 (Railway 또는 로컬)
+    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
     
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": redirect_uri,
+        "redirect_uri": f"{backend_url}/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline"
@@ -102,7 +96,6 @@ def google_login(request: Request):
 # --------------------------------------------------------------
 @app.get("/auth/google/callback")
 async def google_callback(
-    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
     code: str = Query(...)
@@ -112,12 +105,7 @@ async def google_callback(
     
     async with httpx.AsyncClient() as client:
         # 1) 구글 인증 토큰 요청
-        # Railway에서 실제 요청 URL 사용
-        if os.getenv("RAILWAY_ENVIRONMENT"):
-            redirect_uri = f"{request.url.scheme}://{request.url.netloc}/auth/google/callback"
-        else:
-            backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
-            redirect_uri = f"{backend_url}/auth/google/callback"
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
         
         token_resp = await client.post(
             GOOGLE_TOKEN_ENDPOINT,
@@ -125,7 +113,7 @@ async def google_callback(
                 "code": code,
                 "client_id": GOOGLE_CLIENT_ID,
                 "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": redirect_uri,
+                "redirect_uri": f"{backend_url}/auth/google/callback",
                 "grant_type": "authorization_code",
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -175,7 +163,7 @@ async def google_callback(
     await db.commit()
 
     # 5) 프론트엔드로 리다이렉트 (쿠키 포함)
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://meari-pied.vercel.app")
     # 신규 회원이면 steps로, 기존 회원이면 dashboard로
     from datetime import timezone
     now = datetime.now(timezone.utc) if user.created_at and user.created_at.tzinfo else datetime.utcnow()

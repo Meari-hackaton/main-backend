@@ -16,8 +16,11 @@ httpx==0.28.1
 
 # Vector Database (Milvus)
 pymilvus==2.6.0
+# CPU-only sentence transformers (no torch)
 sentence-transformers==5.1.0
-torch==2.8.0
+# CPU-only torch (much smaller)
+--find-links https://download.pytorch.org/whl/cpu
+torch==2.2.0+cpu
 numpy>=1.17
 
 # Graph Database (Neo4j)
@@ -29,8 +32,9 @@ langchain-core==0.3.74
 langchain-google-genai==2.1.8
 langchain-experimental>=0.3.0
 langgraph==0.6.6
+google-generativeai==0.8.3
 
-# ML & NLP
+# ML & NLP (lightweight versions)
 transformers>=4.41.0
 huggingface-hub>=0.20.0
 pandas>=1.2.4
