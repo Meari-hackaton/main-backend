@@ -1,27 +1,58 @@
-# FastAPI 기본 패키지만 남기기
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# Core Framework
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-dotenv==1.1.1
+pydantic==2.11.7
+pydantic-settings==2.10.1
+
+# Database
+sqlalchemy==2.0.43
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+
+# HTTP & Async
+aiohttp==3.12.15
+httpx==0.28.1
+
+# Vector Database (Milvus)
+pymilvus==2.6.0
+sentence-transformers==5.1.0
+numpy>=1.17
+
+# Graph Database (Neo4j)
+neo4j==5.28.2
+
+# LangChain & AI
+langchain==0.3.27
+langchain-core==0.3.74
+langchain-google-genai==2.1.8
+langchain-experimental>=0.3.0
+langgraph==0.6.6
+google-generativeai==0.8.3
+
+# ML & NLP
+transformers>=4.41.0
+huggingface-hub>=0.20.0
+pandas>=1.2.4
+scikit-learn
+scipy
+
+# API & Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.20
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-asyncpg==0.30.0
-alembic==1.12.1
-python-dotenv==1.0.0
-httpx==0.25.2
-pydantic==2.5.0
-pydantic-settings==2.1.0
 
-# OAuth 관련
-google-auth==2.25.2
-google-auth-oauthlib==1.1.0
+# XML Processing
+lxml==5.3.0
 
-# 테스트용 (필요시)
-pytest==8.3.5
+# Utilities
+PyYAML==6.0.2
+click==8.2.1
+
+# Development & Testing
+pytest==8.3.6
 pytest-asyncio==0.24.0
+httpx-sse==0.4.0
 
-# 이 아래 패키지들은 삭제!
-# torch, torchvision, torchaudio
-# tensorflow, transformers
-# nvidia-* 관련 모든 패키지
+# MIDI
+midiutil==1.2.1
