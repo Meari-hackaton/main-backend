@@ -20,7 +20,7 @@ pymilvus==2.3.4
 neo4j==5.15.0
 
 # AI - 호환성 검증된 세트
-google-generativeai==0.3.2
+google-generativeai==0.8.3
 langchain==0.3.13
 langchain-google-genai==2.0.7
 langgraph==0.2.60
