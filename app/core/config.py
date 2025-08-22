@@ -1,20 +1,21 @@
 from typing import Optional, List
 from pydantic_settings import BaseSettings
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, Field
+import os
 
 class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Meari Backend"
     DEBUG: bool = True
     
-    # Database
-    DATABASE_URL: PostgresDsn
+    # Database - Render가 제공하는 DATABASE_URL 사용
+    DATABASE_URL: Optional[str] = Field(default=os.getenv("DATABASE_URL"))
     
     # Security
-    SECRET_KEY: str
+    SECRET_KEY: str = Field(default=os.getenv("SECRET_KEY", "dev-secret-key"))
     
     # BigKinds API
-    BIGKINDS_ACCESS_KEY: str
+    BIGKINDS_ACCESS_KEY: Optional[str] = Field(default=os.getenv("BIGKINDS_ACCESS_KEY"))
     
     # Frontend URLs
     FRONTEND_URL: str = "http://localhost:3000"
