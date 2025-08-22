@@ -15,6 +15,8 @@ httpx==0.25.2
 
 # Vector Database
 pymilvus==2.3.4
+marshmallow==3.20.1
+environs==10.0.0
 
 # Graph Database
 neo4j==5.15.0
