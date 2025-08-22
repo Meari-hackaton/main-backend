@@ -13,12 +13,10 @@ psycopg2-binary==2.9.9
 # HTTP & Async
 httpx==0.25.2
 
-# Vector Database
-marshmallow>=3.19.0,<4.0.0
-environs>=10.0.0,<11.0.0
+# Vector Database (Milvus)
 pymilvus==2.3.4
 
-# Graph Database
+# Graph Database (Neo4j)
 neo4j==5.15.0
 
 # AI - 호환성 검증된 세트
@@ -41,6 +39,10 @@ google-auth-oauthlib==1.1.0
 PyYAML==6.0.1
 click==8.1.7
 
-# Development & Testing (로컬 전용)
+# ⚠️ marshmallow / environs 충돌 해결 (Milvus → environs → marshmallow)
+marshmallow>=3.13,<4
+environs>=10.3.0
+
+# Development & Testing (local only)
 # pytest==7.4.3
-# pytest-asyncio==0.21.1빌드는 성공했는데 시작 명령어가 잘못되었네요! Django용 gunicorn이 아니라 FastAPI용 uvicorn을 사용해야 합니다.
+# pytest-asyncio==0.21.1
