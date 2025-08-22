@@ -2,8 +2,8 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-dotenv==1.0.0
-pydantic==2.7.4
-pydantic-settings==2.3.4
+pydantic>=2.7.4,<3.0.0
+pydantic-settings>=2.3.4
 
 # Database
 sqlalchemy==2.0.23
@@ -15,18 +15,16 @@ httpx==0.25.2
 
 # Vector Database
 pymilvus==2.3.4
-marshmallow==3.20.1
-environs==10.0.0
 
 # Graph Database
 neo4j==5.15.0
 
 # AI - 호환성 검증된 세트
-google-generativeai==0.8.3
-langchain==0.3.13
-langchain-google-genai==2.0.7
-langgraph==0.2.60
-langsmith==0.2.6
+google-generativeai>=0.8.0,<0.9.0
+langchain>=0.3.0,<0.4.0
+langchain-google-genai>=2.0.0,<3.0.0
+langgraph>=0.2.0,<0.3.0
+langsmith>=0.2.0,<0.3.0
 
 # API & Auth
 python-jose[cryptography]==3.3.0
