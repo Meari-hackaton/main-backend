@@ -14,6 +14,8 @@ psycopg2-binary==2.9.9
 httpx==0.25.2
 
 # Vector Database
+marshmallow>=3.19.0,<4.0.0
+environs>=10.0.0,<11.0.0
 pymilvus==2.3.4
 
 # Graph Database
