@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Column, String, DateTime, ForeignKey, func, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -9,11 +9,15 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    social_provider = Column(String(50), nullable=False)
-    social_id = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
+    password = Column(String(255), nullable=True)  # nullable for backward compatibility
     nickname = Column(String(100))
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    # OAuth 필드 (하위 호환성 유지)
+    social_provider = Column(String(50), nullable=True)
+    social_id = Column(String(255), nullable=True)
     
     # 관계 설정
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
@@ -25,11 +29,6 @@ class User(Base):
     persona_histories = relationship("AIPersonaHistory", back_populates="user", cascade="all, delete-orphan")
     daily_rituals = relationship("DailyRitual", back_populates="user", cascade="all, delete-orphan")
     user_streak = relationship("UserStreak", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    
-    # 복합 유니크 제약조건
-    __table_args__ = (
-        UniqueConstraint('social_provider', 'social_id', name='_social_provider_id_uc'),
-    )
 
 
 class UserSession(Base):

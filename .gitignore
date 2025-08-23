@@ -35,10 +35,10 @@ logs/
 Thumbs.db
 
 # Claude related files
-claude*
-../CLAUDE.md
-*.claude
-.claude/
+# claude*
+# ../CLAUDE.md
+# *.claude
+# .claude/
 
 # Test coverage
 htmlcov/

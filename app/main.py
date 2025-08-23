@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.auth import get_current_user, get_optional_user
 # from app.core.workflow_manager import initialize_workflow
 from app.api.v1.api import api_router
+from app.api.v1.auth_simple import router as auth_router  # 자체 인증 추가
 from app.models.user import User, UserSession
 
 app = FastAPI(
@@ -22,17 +23,27 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
 )
 
-# CORS 설정
+# CORS 설정 (EC2 배포 포함)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://localhost:8001", "*"],  # React 개발 서버 및 개발용
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000", 
+        "http://localhost:8001",
+        "http://ec2-43-200-4-71.ap-northeast-2.compute.amazonaws.com",  # Frontend EC2
+        "http://ec2-43-200-4-71.ap-northeast-2.compute.amazonaws.com:3000",
+        "http://ec2-13-125-128-95.ap-northeast-2.compute.amazonaws.com",  # Backend EC2
+        "http://ec2-13-125-128-95.ap-northeast-2.compute.amazonaws.com:8000",
+        "*"  # 개발용 (프로덕션에서는 제거)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # API 라우터 등록
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")  # 자체 인증 API
+app.include_router(api_router, prefix="/api/v1")   # 기존 API
 
 # @app.on_event("startup")
 # async def startup_event():
@@ -243,3 +254,12 @@ async def logout(
 @app.get("/")
 async def root():
     return {"message": "Meari Backend API", "version": "1.0.0"}
+
+@app.get("/health")
+async def health_check():
+    """헬스체크 엔드포인트 (EC2 배포 확인용)"""
+    return {
+        "status": "healthy",
+        "service": "meari-backend",
+        "timestamp": datetime.utcnow().isoformat()
+    }

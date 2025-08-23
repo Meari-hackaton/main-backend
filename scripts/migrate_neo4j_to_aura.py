@@ -18,8 +18,8 @@ LOCAL_URI = "bolt://localhost:7687"
 LOCAL_AUTH = ("neo4j", os.getenv("NEO4J_PASSWORD", "meari_password"))
 
 # Aura Cloud
-CLOUD_URI = "neo4j+s://9dc20ae3.databases.neo4j.io"
-CLOUD_AUTH = ("neo4j", "cBkFpvp7Bkh4LgB8MZLyIWqzFPee0R9j09gnOjCYYFo")
+CLOUD_URI = os.getenv("NEO4J_URI")
+CLOUD_AUTH = ("neo4j", os.getenv("NEO4J_PASSWORD"))
 
 def migrate_data():
     """로컬 Neo4j에서 Aura로 데이터 마이그레이션"""
