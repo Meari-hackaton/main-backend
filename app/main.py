@@ -47,11 +47,26 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")  # 자체 인증 API
 app.include_router(api_router, prefix="/api/v1")   # 기존 API
 
-# @app.on_event("startup")
-# async def startup_event():
-#     """서버 시작 시 워크플로우 및 연결 초기화"""
-#     # initialize_workflow()
-#     print(f"🌐 API 문서: http://localhost:8001/docs")
+@app.on_event("startup")
+async def startup_event():
+    """서버 시작 시 무거운 모델 미리 로드"""
+    import os
+    
+    # DEMO_MODE가 아닐 때만 모델 로드
+    if os.getenv("DEMO_MODE", "false").lower() != "true":
+        print("🔄 임베딩 모델 사전 로드 중...")
+        from app.services.data.embedding_service import get_embedding_model
+        try:
+            model = get_embedding_model()
+            # 테스트 임베딩 생성
+            test_embedding = model.encode("테스트")
+            print(f"✅ 임베딩 모델 로드 완료 (차원: {len(test_embedding)})")
+        except Exception as e:
+            print(f"⚠️ 임베딩 모델 로드 실패: {e}")
+    else:
+        print("🚀 DEMO_MODE 활성화 - 임베딩 모델 스킵")
+    
+    print(f"🌐 API 문서: http://localhost:8000/docs")
 
 # OAuth 환경 변수
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
