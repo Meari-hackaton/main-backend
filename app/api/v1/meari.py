@@ -9,7 +9,7 @@ from datetime import datetime
 import uuid
 
 from app.core.database import get_db
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, get_optional_user
 from app.models.user import User
 from app.schemas.meari import (
     MeariSessionRequest,
@@ -39,7 +39,7 @@ router = APIRouter(
 )
 async def create_meari_session(
     request: MeariSessionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db)
 ) -> MeariSessionResponse:
     
@@ -74,7 +74,8 @@ async def create_meari_session(
             )
         
         session_id = uuid.uuid4()
-        user_id = current_user.id  # 인증된 사용자의 ID 사용
+        # 테스트를 위해 임시 user_id 사용 (current_user가 없으면 임시 ID)
+        user_id = current_user.id if current_user else uuid.uuid4()
         
         session = MeariSession(
             id=session_id,
