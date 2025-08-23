@@ -378,25 +378,31 @@ def get_quotes_collection() -> Collection:
 def get_policies_collection() -> Collection:
     """정책 컬렉션 가져오기 (스레드 세이프)"""
     try:
-        # 스레드별로 독립적인 컬렉션 객체 유지
-        if not hasattr(thread_local, 'policies_collection'):
-            # 연결 확인
-            if not connections.has_connection("default"):
-                uri = os.getenv("MILVUS_URI")
-                token = os.getenv("MILVUS_TOKEN")
-                connections.connect(
-                    alias="default",
-                    uri=uri,
-                    token=token,
-                    secure=True
-                )
-            
-            # 컬렉션 로드 (스레드당 한 번만)
-            thread_local.policies_collection = Collection("meari_policies")
-            thread_local.policies_collection.load()
-            logger.info(f"Thread {threading.current_thread().name}: 정책 컬렉션 로드")
+        # 매번 연결 상태 확인 및 재연결
+        try:
+            # 기존 연결이 있으면 제거
+            if connections.has_connection("default"):
+                connections.remove_connection("default")
+        except:
+            pass
         
-        return thread_local.policies_collection
+        # 새로운 연결 생성
+        uri = os.getenv("MILVUS_URI")
+        token = os.getenv("MILVUS_TOKEN")
+        connections.connect(
+            alias="default",
+            uri=uri,
+            token=token,
+            secure=True,
+            timeout=30
+        )
+        
+        # 컬렉션 로드
+        collection = Collection("meari_policies")
+        collection.load()
+        logger.info(f"Thread {threading.current_thread().name}: 정책 컬렉션 재연결 및 로드")
+        
+        return collection
     except Exception as e:
         logger.error(f"정책 컬렉션 가져오기 실패: {e}")
         raise
