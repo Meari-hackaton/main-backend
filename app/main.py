@@ -32,9 +32,11 @@ app.add_middleware(
         "http://localhost:8001",
         "http://ec2-43-200-4-71.ap-northeast-2.compute.amazonaws.com",  # Frontend EC2
         "http://ec2-43-200-4-71.ap-northeast-2.compute.amazonaws.com:3000",
+        "http://43.200.4.71",  # Frontend IP 직접 접근
+        "http://43.200.4.71:3000",
         "http://ec2-13-125-128-95.ap-northeast-2.compute.amazonaws.com",  # Backend EC2
         "http://ec2-13-125-128-95.ap-northeast-2.compute.amazonaws.com:8000",
-        "*"  # 개발용 (프로덕션에서는 제거)
+        # "*" 제거 - withCredentials와 충돌
     ],
     allow_credentials=True,
     allow_methods=["*"],
