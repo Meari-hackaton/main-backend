@@ -68,8 +68,8 @@ async def create_meari_session(
                 "characteristics": ["특징1", "특징2"],
                 "needs": ["니즈1", "니즈2"],
                 "growth_direction": "성장 방향",
-                "depth": 1,
-                "depth_label": "surface"
+                "depth": "surface",  # Literal 타입
+                "depth_label": "표면적 이해"
             }
         )
     
