@@ -67,7 +67,9 @@ async def create_meari_session(
                 "summary": "테스트 페르소나",
                 "characteristics": ["특징1", "특징2"],
                 "needs": ["니즈1", "니즈2"],
-                "growth_direction": "성장 방향"
+                "growth_direction": "성장 방향",
+                "depth": 1,
+                "depth_label": "surface"
             }
         )
     
