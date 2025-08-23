@@ -43,6 +43,34 @@ async def create_meari_session(
     db: AsyncSession = Depends(get_db)
 ) -> MeariSessionResponse:
     
+    # 테스트용 빠른 응답 (DEMO MODE)
+    import os
+    if os.getenv("DEMO_MODE", "false").lower() == "true":
+        return MeariSessionResponse(
+            status="success",
+            session_type="initial",
+            timestamp=datetime.utcnow(),
+            session_id=uuid.uuid4(),
+            cards={
+                "empathy": [{
+                    "type": "empathy",
+                    "content": "테스트 공감 카드입니다. 당신의 고민을 이해합니다.",
+                    "metadata": {}
+                }],
+                "reflection": [{
+                    "type": "reflection",
+                    "content": "테스트 성찰 카드입니다. 함께 생각해봅시다.",
+                    "metadata": {}
+                }]
+            },
+            persona={
+                "summary": "테스트 페르소나",
+                "characteristics": ["특징1", "특징2"],
+                "needs": ["니즈1", "니즈2"],
+                "growth_direction": "성장 방향"
+            }
+        )
+    
     try:
         workflow = MeariWorkflow()
         
