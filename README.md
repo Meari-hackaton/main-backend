@@ -123,6 +123,4 @@ Hybrid RAG & Multi-Agent System을 기반으로 Vector DB의 의미 검색과 Gr
 
 **Embedding**: KURE-v1 (Korean Language Understanding)
 
-**Python**: 3.12 (Docker) / 3.11+ (Local)
-
 **Infrastructure**: AWS EC2, Docker, Docker Compose, Nginx
