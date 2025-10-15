@@ -1,339 +1,118 @@
-# 메아리(Meari) 백엔드 API 서버
+# 메아리(Meari): 은둔·고립 청년을 위한 AI 심리회복 서비스
+뉴스 빅데이터 속 '인과관계'를 분석하여, 단순 공감을 넘어 사회 구조적 원인과 해결책을 제시하는 Hybrid RAG 기반 AI 서비스
 
-청년의 마음 건강을 위한 AI 심리회복 서비스 백엔드
+## 목차
+1. [서비스 아키텍처](#서비스-아키텍처)
+2. [핵심 기능 구현](#핵심-기능-구현)
+3. [기술적 도전과 해결 과정](#기술적-도전과-해결-과정)
+4. [기술 스택](#기술-스택)
 
-## 🚀 빠른 시작 (Docker Compose 사용 - 권장)
+## 서비스 아키텍처
 
-### 팀원을 위한 가장 간단한 실행 방법
+Hybrid RAG & Multi-Agent System을 기반으로 Vector DB의 의미 검색과 Graph DB의 관계 추론을 결합한 시스템입니다. 6개의 전문 AI 에이전트가 협업하여 공감-성찰-성장의 3단계 심리회복 과정과 지속적인 리추얼 관리를 제공합니다.
 
-```bash
-# 1. 저장소 클론
-git clone https://github.com/your-org/meari-backend.git
-cd meari-backend
+## 핵심 기능 구현
 
-# 2. .env 파일 받기 (팀 리더에게 요청)
-# .env 파일을 프로젝트 루트에 저장
+### 1. 초기 세션: 태그 선택 & 마음 진단
+- **태그 시스템**: 사용자의 현재 고민 영역을 8개 카테고리로 분류 (진로/취업, 인간관계, 번아웃 등)
+- **마음 진단**: 선택된 태그 기반으로 현재 감정 상태와 문제 맥락을 분석
+- **AI 에이전트**: 진단 에이전트가 후속 카드 생성을 위한 기초 데이터 수집
 
-# 3. Docker Compose로 전체 환경 실행 (PostgreSQL 포함)
-docker-compose -f docker-compose-simple.yml up
+### 2. 공감 카드 - "오늘의 메아리"
+**목적**: 사용자의 감정에 대한 깊이 있는 공감과 정서적 지지
 
-# 서버가 http://localhost:8000 에서 실행됩니다
-# API 문서: http://localhost:8000/docs
-```
+**구현 방식**:
+- **감정 분석 에이전트**: 사용자 입력 텍스트에서 감정 상태와 강도를 정밀 분석
+- **Vector RAG**: Milvus DB에서 감정적으로 유사한 뉴스 데이터를 검색
+- **공감 메시지 생성**: LLM이 검색된 데이터를 바탕으로 위로와 공감의 개인화된 메시지 작성
 
-**Docker 설치 필요**: [Docker Desktop 다운로드](https://www.docker.com/products/docker-desktop/)
+**데이터**: 뉴스에서 추출한 877개의 감정적 인용문 및 공감 요소
 
-### psql 없이도 작동합니다!
-- Docker Compose가 PostgreSQL을 자동으로 설정
-- 887개 뉴스, 3,977개 정책 등 모든 데이터 자동 로드
-- Neo4j, Milvus는 클라우드 서비스 사용 (.env 파일에 설정됨)
+### 3. 성찰 카드 - "사회적 맥락 재해석"  
+**목적**: 개인 문제를 사회 구조적 관점에서 재해석하여 자기 책임감 완화
 
----
+**구현 방식**:
+- **성찰 에이전트**: 사용자 문제와 연관된 사회적 원인들을 식별
+- **Graph RAG**: Neo4j에서 원인-문제-해결책의 인과관계 체인을 Cypher 쿼리로 검색
+- **관점 전환**: "개인 탓이 아닌 사회 구조적 문제"라는 새로운 시각 제시
 
-## 📋 목차
-1. [프로젝트 개요](#프로젝트-개요)
-2. [기술 스택](#기술-스택)
-3. [설치 방법 선택](#설치-방법-선택)
-4. [Docker 사용 (권장)](#docker-사용-권장)
-5. [로컬 설치](#로컬-설치)
-6. [API 문서](#api-문서)
-7. [트러블슈팅](#트러블슈팅)
+**데이터**: BigKinds API로 수집한 900개 뉴스의 인과관계 그래프
 
-## 프로젝트 개요
+### 4. 성장 콘텐츠 - "실질적 해결책"
+**목적**: 문제 해결을 위한 구체적이고 실행 가능한 방안 제시
 
-메아리는 사회적 고립을 겪는 청년을 위한 AI 기반 심리회복 서비스입니다.
-- 공감 카드와 성찰 카드를 통한 정서적 지원
-- 맞춤형 성장 콘텐츠 추천 (정보/경험/지원)
-- 28일 리츄얼을 통한 마음나무 성장
-- 페르소나 기반 개인화 서비스
+**3가지 콘텐츠 타입**:
+- **정보(Information)**: 문제 해결에 도움되는 전문 지식과 가이드
+- **경험(Experience)**: 유사한 상황을 극복한 실제 사례와 경험담  
+- **지원(Support)**: 청년 정책 DB(3,977개)에서 매칭된 맞춤형 지원 프로그램
+
+**구현 방식**:
+- **Multi-Modal RAG**: Vector + Graph DB를 모두 활용한 통합 검색
+- **정책 매칭 에이전트**: 사용자 상황에 최적화된 정부/지자체 지원책 추천
+- **콘텐츠 큐레이션**: 3가지 타입의 콘텐츠를 균형있게 조합하여 제공
+
+### 5. 리추얼 시스템 - "지속적 관리"
+**목적**: 일상적인 감정 기록과 지속적인 심리 상태 모니터링
+
+**구현 기능**:
+- **감정 정도 기록**: 일일 감정 상태를 1-10 스케일로 기록
+- **간단 리추얼**: 하루 3분 내외의 간단한 성찰 활동
+- **패턴 분석**: AI가 감정 변화 패턴을 분석하여 맞춤형 피드백 제공
+- **마음나무 성장**: 28일 리추얼 완성 시 시각적 성취감 제공
+
+### 6. 대시보드 - "통합 현황 관리"
+**목적**: 전체 심리회복 과정의 현황과 성과를 한눈에 파악
+
+**주요 기능**:
+- **다른 고민영역**: 이전에 다뤘던 다른 주제들의 히스토리 관리
+- **결과관 받기**: 완료된 세션들의 성과와 개선사항 요약
+- **월별 캘린더**: 리추얼 수행 현황과 감정 변화 트렌드 시각화
+- **성장 지표**: 전반적인 심리 회복 진전도를 수치화하여 표시
+
+### 7. 페르소나 시스템 - "개인화 AI"
+**목적**: 사용자별 맞춤형 AI 어시스턴트 생성
+
+**구현 방식**:
+- **아이메이지**: 사용자와의 상호작용을 통해 개인화된 AI 캐릭터 생성
+- **대화 기억**: 이전 세션들의 맥락을 기억하여 연속성 있는 상담 제공
+- **스타일 적응**: 사용자의 선호하는 소통 방식에 맞춰 톤앤매너 조정
+
+## 기술적 도전과 해결 과정 (Technical Deep Dive)
+
+### [도전 1] Graph RAG 도입: 검색 속도 5배 향상 및 맥락 보존
+**문제**: 초기 ReAct 패턴의 멀티 에이전트 방식은 순차적 Vector 검색으로 검색 Latency가 10초 이상 소요되었고, 에이전트 간 정보 전달 과정에서 원본 뉴스의 핵심 맥락이 손실되었습니다.
+
+**해결**: 900개의 뉴스를 Neo4j 지식그래프로 사전 구조화했습니다. 한 번의 Cypher 쿼리로 '원인-문제-해결책'의 전체 인과 체인을 조회하도록 설계하여 검색 Latency를 2초로 단축하고, 정보 손실 문제를 원천적으로 해결했습니다.
+
+### [도전 2] 자가 복구 에이전트: LLM의 한계 극복 (쿼리 성공률 64% → 97%)
+**문제**: Text-to-Cypher 에이전트의 초기 성공률이 **64%**에 불과하여 Graph RAG 시스템 전체의 안정성을 심각하게 저해하는 요인이었습니다.
+
+**해결**: 쿼리 실행 실패 시, 에러 메시지와 DB 스키마 정보를 LLM에게 다시 전달하여 스스로 쿼리를 수정하게 하는 **'자가 복구(Self-Correction) 메커니즘'**을 구현하여 쿼리 성공률을 97%까지 끌어올렸습니다.
+
+### [도전 3] 프롬프트 모듈화: AI 시스템의 유지보수성 및 확장성 확보
+**문제**: 6개 전문 Agent의 프롬프트가 각기 다른 소스코드 파일에 흩어져 있어 일관성 유지가 어렵고, 버전 관리가 비효율적이었습니다.
+
+**해결**: 모든 프롬프트를 중앙에서 관리하는 PromptManager를 설계하고, 도메인별 템플릿을 모듈화하여 프롬프트의 재사용성을 높이고 버전 관리를 체계화했습니다.
+
+### [도전 4] 자동화된 데이터 파이프라인: End-to-End 시스템 구현
+**문제**: 뉴스 데이터를 수동으로 수집하고 전처리하는 과정은 재현성이 낮고 비효율적이었습니다.
+
+**해결**: BigKinds API를 통해 데이터를 수집, PostgreSQL에 원본(SSOT)을 저장한 뒤, Vector DB(Milvus)와 Graph DB(Neo4j)로 자동 적재하는 End-to-End 데이터 파이프라인을 구축했습니다.
 
 ## 기술 스택
 
-- **Framework**: FastAPI 0.116.1
-- **Database**: PostgreSQL + SQLAlchemy 2.0
-- **Vector DB**: Milvus (Zilliz Cloud)
-- **Graph DB**: Neo4j (Aura Cloud)
-- **AI/LLM**: Google Gemini, LangChain, LangGraph
-- **Embedding**: KURE-v1 (한국어 특화)
-- **Python**: 3.12 (Docker) / 3.11+ (로컬)
+**Framework**: FastAPI
 
-## 설치 방법 선택
+**AI/LLM**: Google Gemini, LangChain, LangGraph
 
-### 방법 1: Docker 사용 (권장) ✅
-- PostgreSQL 설치 불필요
-- 모든 데이터 자동 로드
-- 팀원 간 환경 일치 보장
+**Database**: PostgreSQL + SQLAlchemy
 
-### 방법 2: 로컬 설치
-- Python 가상환경 사용
-- PostgreSQL 별도 설치 필요
-- 개발 시 더 빠른 반응 속도
+**Vector DB**: Milvus (Zilliz Cloud)
 
-## Docker 사용 (권장)
+**Graph DB**: Neo4j (Aura Cloud)
 
-### 필요한 파일
-팀 리더로부터 받아야 할 파일:
-1. **`.env`** - 환경 변수 파일 (API 키, 클라우드 DB 연결 정보)
-2. **`meari_db_dump.sql`** - PostgreSQL 초기 데이터 (7.2MB)
+**Embedding**: KURE-v1 (Korean Language Understanding)
 
-### Docker Compose 파일 2종
+**Python**: 3.12 (Docker) / 3.11+ (Local)
 
-#### 1. 개발/일반 사용 (docker-compose-simple.yml)
-```bash
-# 단일 앱 인스턴스 실행
-docker-compose -f docker-compose-simple.yml up
-
-# 백그라운드 실행
-docker-compose -f docker-compose-simple.yml up -d
-
-# 로그 확인
-docker-compose -f docker-compose-simple.yml logs -f app
-
-# 종료
-docker-compose -f docker-compose-simple.yml down
-```
-
-#### 2. 30명 동시 테스트용 (docker-compose.yml)
-```bash
-# 6개 앱 인스턴스 + Nginx 로드밸런서
-docker-compose up
-
-# 30명 동시 테스트 실행
-./test_concurrent_30.sh
-```
-
-### Docker 환경 초기화
-```bash
-# 모든 컨테이너와 볼륨 삭제 (데이터 초기화)
-docker-compose down -v
-
-# 다시 시작 (데이터 자동 재로드)
-docker-compose -f docker-compose-simple.yml up
-```
-
-## 로컬 설치
-
-### 필수 준비사항
-- Python 3.11+ (3.13은 호환성 문제 있음)
-- PostgreSQL 15+
-- Git
-
-### 1. 저장소 클론
-```bash
-git clone https://github.com/your-org/meari-backend.git
-cd meari-backend
-```
-
-### 2. Python 가상환경 설정
-```bash
-# 가상환경 생성
-python -m venv venv
-
-# 가상환경 활성화
-# macOS/Linux:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate
-```
-
-### 3. 의존성 설치
-```bash
-pip install -r requirements.txt
-```
-
-### 4. PostgreSQL 설정
-
-#### macOS (Homebrew)
-```bash
-brew install postgresql@15
-brew services start postgresql@15
-```
-
-#### Ubuntu/Debian
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-```
-
-#### Windows
-[PostgreSQL 공식 다운로드](https://www.postgresql.org/download/windows/)
-
-### 5. 데이터베이스 생성 및 복원
-```bash
-# PostgreSQL 접속
-psql -U postgres
-
-# 데이터베이스 생성
-CREATE DATABASE meari_db;
-CREATE USER meari_user WITH PASSWORD 'meari_password';
-GRANT ALL PRIVILEGES ON DATABASE meari_db TO meari_user;
-\q
-
-# 데이터 복원 (meari_db_dump.sql 파일 필요)
-psql -U meari_user -d meari_db < meari_db_dump.sql
-```
-
-### 6. 서버 실행
-```bash
-# 개발 모드 (자동 리로드)
-uvicorn app.main:app --reload --port 8001
-
-# 또는
-python -m uvicorn app.main:app --reload --port 8001
-```
-
-## 환경 변수 (.env)
-
-필수 환경 변수 (팀 리더에게 요청):
-```env
-# Database
-DATABASE_URL=postgresql+asyncpg://meari_user:meari_password@localhost/meari_db
-
-# API Keys
-GEMINI_API_KEY=your-gemini-api-key
-BIGKINDS_ACCESS_KEY=your-bigkinds-key
-YOUTH_POLICY_API_KEY=your-youth-policy-key
-
-# Cloud Services (이미 데이터 준비됨)
-MILVUS_URI=https://xxx.zillizcloud.com
-MILVUS_TOKEN=your-milvus-token
-NEO4J_URI=neo4j+s://xxx.databases.neo4j.io
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-neo4j-password
-
-# OAuth (Optional)
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-```
-
-## 클라우드 서비스 상태
-
-모든 클라우드 서비스는 이미 데이터가 준비되어 있습니다:
-- **Milvus (Zilliz Cloud)**: ✅ 877개 인용문, 3,977개 정책 벡터
-- **Neo4j (Aura Cloud)**: ✅ 5,262개 노드, 15,257개 관계
-- **PostgreSQL**: Docker 사용 시 자동 로드, 로컬은 덤프 파일 복원 필요
-
-⚠️ **중요**: Neo4j와 Milvus는 클라우드 서비스를 사용합니다. 
-- 팀원들은 `.env` 파일의 연결 정보로 자동 연결됩니다
-- 데이터 수집 스크립트(`scripts/collect_*.py`)는 실행하지 마세요 (이미 완료됨)
-- 로컬 Neo4j/Milvus 설치 불필요
-
-## API 문서
-
-서버 실행 후:
-- **Swagger UI**: http://localhost:8000/docs (Docker)
-- **Swagger UI**: http://localhost:8001/docs (로컬)
-- **ReDoc**: http://localhost:8000/redoc
-
-### 주요 엔드포인트
-
-#### 메아리 세션
-- `POST /api/v1/meari/sessions` - 초기 세션 생성 (공감/성찰 카드)
-- `POST /api/v1/meari/growth-contents` - 성장 콘텐츠 생성
-- `POST /api/v1/meari/rituals` - 리츄얼 기록
-
-#### 대시보드
-- `GET /api/v1/dashboard/` - 대시보드 메인
-- `GET /api/v1/dashboard/calendar` - 월별 캘린더
-- `POST /api/v1/dashboard/rituals` - 일일 리츄얼 생성
-
-## 트러블슈팅
-
-### Docker 관련
-
-#### 포트 충돌
-```
-Error: bind: address already in use
-```
-**해결**: 
-```bash
-# 기존 PostgreSQL 중지
-sudo systemctl stop postgresql
-# 또는 Docker Compose 포트 변경
-```
-
-#### 메모리 부족
-```
-Error: Cannot allocate memory
-```
-**해결**: Docker Desktop 설정에서 메모리 할당 증가 (최소 4GB)
-
-### 로컬 설치 관련
-
-#### psql 명령어 없음
-```
-command not found: psql
-```
-**해결**: Docker Compose 사용 또는 PostgreSQL 클라이언트 설치
-
-#### Python 3.13 호환성 문제
-```
-RuntimeError: Could not parse python long as longdouble
-```
-**해결**: Python 3.12 또는 3.11 사용
-
-### API 관련
-
-#### 동시 사용자 제한
-- 단일 인스턴스: 3-5명
-- Docker Compose (6 인스턴스): 30명
-- Gemini API 제한: 분당 10 요청
-
-#### 응답 시간이 느림 (30-60초)
-정상입니다. AI 처리에 시간이 필요합니다:
-- 공감 카드: Vector RAG (Milvus)
-- 성찰 카드: Graph RAG (Neo4j)
-- 페르소나 생성: LLM 처리
-
-## 개발 팁
-
-### 로그 확인
-```bash
-# Docker 로그
-docker-compose -f docker-compose-simple.yml logs -f
-
-# 로컬 실행 시 터미널에 직접 출력
-```
-
-### 데이터베이스 접속
-```bash
-# Docker PostgreSQL 접속
-docker exec -it meari-postgres psql -U meari_user -d meari_db
-
-# 테이블 확인
-\dt
-
-# 데이터 개수 확인
-SELECT COUNT(*) FROM news;  -- 887개
-SELECT COUNT(*) FROM youth_policies;  -- 3,977개
-```
-
-### 테스트 실행
-```bash
-# 단일 사용자 테스트
-curl -X POST http://localhost:8000/api/v1/meari/sessions \
-  -H "Content-Type: application/json" \
-  -d '{"selected_tag_id": 1}'
-
-# 동시 사용자 테스트
-./test_concurrent3.sh
-```
-
-## 지원
-
-문제 발생 시:
-1. 이 README의 트러블슈팅 섹션 확인
-2. 팀 슬랙 채널에 문의
-3. 프로젝트 리더에게 직접 연락
-
-## 라이센스
-
-This project is proprietary and confidential.
-
----
-
-**Note**: 
-- `.env` 파일과 `meari_db_dump.sql`은 절대 Git에 커밋하지 마세요!
-- 개발 시 docker-compose-simple.yml 사용 권장
-- 성능 테스트 시에만 docker-compose.yml (6 인스턴스) 사용
+**Infrastructure**: AWS EC2, Docker, Docker Compose, Nginx
